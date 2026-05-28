@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MUFC Fan Venue</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="MUFC Fan Venue home">
+        <span class="crest">MU</span>
+        <span>MUFC Fan Venue</span>
+      </a>
+      <nav class="nav-actions">
+        <button class="ghost-button" data-route="home">首页</button>
+        <button class="ghost-button" data-route="submit">提交作品</button>
+        <button class="primary-button" id="authToggle">登录</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Fan-made venue gallery</p>
+          <h1>把你的红魔瞬间带到会场首页</h1>
+          <p>
+            受邀用户可以提交一张图片作品，所有登录用户都能进入详情页评分。页面会按评分与提交时间展示，适合作为小型线下活动、观赛会或创作征集入口。
+          </p>
+          <div class="hero-actions">
+            <button class="primary-button" data-route="submit">上传作品</button>
+            <button class="secondary-button" data-route="home">浏览作品</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside class="panel auth-panel" id="authPanel">
+          <div class="panel-heading">
+            <h2>用户入口</h2>
+            <p id="sessionLabel">未登录</p>
+          </div>
+
+          <form id="loginForm" class="stack">
+            <label>
+              邮箱
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              密码
+              <input name="password" type="password" autocomplete="current-password" minlength="6" required />
+            </label>
+            <button class="primary-button" type="submit">登录</button>
+          </form>
+
+          <form id="registerForm" class="stack hidden">
+            <label>
+              昵称
+              <input name="displayName" autocomplete="nickname" required />
+            </label>
+            <label>
+              邮箱
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              密码
+              <input name="password" type="password" autocomplete="new-password" minlength="6" required />
+            </label>
+            <label>
+              邀请码
+              <input name="inviteCode" autocomplete="off" required />
+            </label>
+            <button class="primary-button" type="submit">注册</button>
+          </form>
+
+          <button class="link-button" id="switchAuth" type="button">需要邀请码注册？</button>
+          <p class="notice" id="authNotice"></p>
+        </aside>
+
+        <section class="content-view" id="homeView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Gallery</p>
+              <h2>会场作品</h2>
+            </div>
+            <button class="secondary-button" id="refreshGallery" type="button">刷新</button>
+          </div>
+          <div class="gallery-grid" id="galleryGrid"></div>
+        </section>
+
+        <section class="content-view hidden" id="submitView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Submission</p>
+              <h2>提交图片</h2>
+            </div>
+          </div>
+          <form id="submissionForm" class="submit-form">
+            <label>
+              标题
+              <input name="title" maxlength="80" required placeholder="例如：Old Trafford Night" />
+            </label>
+            <label>
+              说明
+              <textarea name="description" maxlength="500" rows="5" placeholder="写一点作品背景"></textarea>
+            </label>
+            <label>
+              图片文件
+              <input name="image" type="file" accept="image/png,image/jpeg,image/webp" required />
+            </label>
+            <button class="primary-button" type="submit">提交到会场</button>
+          </form>
+          <p class="notice" id="submitNotice"></p>
+        </section>
+
+        <section class="content-view hidden" id="detailView">
+          <button class="link-button" data-route="home" type="button">返回首页</button>
+          <article class="detail" id="detailContent"></article>
+        </section>
+      </section>
+    </main>
+
+    <template id="submissionCardTemplate">
+      <article class="submission-card">
+        <button class="image-button" type="button">
+          <img alt="" />
+        </button>
+        <div class="card-body">
+          <h3></h3>
+          <p></p>
+          <div class="score-row">
+            <span class="score-pill"></span>
+            <button class="secondary-button" type="button">评分</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
