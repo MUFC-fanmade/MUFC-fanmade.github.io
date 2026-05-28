@@ -1,0 +1,4 @@
+project_id = "gywktjbbztowujwitrfj"
+
+[functions.register-with-invite]
+verify_jwt = false

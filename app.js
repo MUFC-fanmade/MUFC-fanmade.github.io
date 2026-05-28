@@ -242,7 +242,16 @@ async function handleRegister(event) {
   });
 
   if (error) {
-    setNotice(els.authNotice, error.message, true);
+    let message = error.message;
+    if (error.context) {
+      try {
+        const details = await error.context.json();
+        message = details.error || details.message || message;
+      } catch (_parseError) {
+        message = error.message;
+      }
+    }
+    setNotice(els.authNotice, message, true);
     return;
   }
 

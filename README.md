@@ -24,6 +24,7 @@ Use GitHub Pages for the static frontend and Supabase as the backend service:
 - Supabase Storage for uploaded image files.
 - Supabase Edge Functions for invite-only registration, so the invite validation and admin user creation happen server-side.
 - Row Level Security policies and explicit grants to keep browser access scoped to the intended public API.
+- JWT verification is disabled only for `register-with-invite` because registration happens before a user has a session; invite validation still happens server-side.
 
 This keeps hosting simple: GitHub Pages serves the site, while Supabase provides the API, database, auth, file storage, and small backend function layer.
 
