@@ -18,7 +18,7 @@
       <nav class="nav-actions">
         <button class="ghost-button" data-route="home">首页</button>
         <button class="ghost-button" data-route="submit">提交作品</button>
-        <button class="primary-button" id="authToggle">登录</button>
+        <button class="primary-button" id="authToggle" data-route="auth">登录</button>
       </nav>
     </header>
 
@@ -38,48 +38,6 @@
       </section>
 
       <section class="workspace">
-        <aside class="panel auth-panel" id="authPanel">
-          <div class="panel-heading">
-            <h2>用户入口</h2>
-            <p id="sessionLabel">未登录</p>
-          </div>
-
-          <form id="loginForm" class="stack">
-            <label>
-              邮箱
-              <input name="email" type="email" autocomplete="email" required />
-            </label>
-            <label>
-              密码
-              <input name="password" type="password" autocomplete="current-password" minlength="6" required />
-            </label>
-            <button class="primary-button" type="submit">登录</button>
-          </form>
-
-          <form id="registerForm" class="stack hidden">
-            <label>
-              昵称
-              <input name="displayName" autocomplete="nickname" required />
-            </label>
-            <label>
-              邮箱
-              <input name="email" type="email" autocomplete="email" required />
-            </label>
-            <label>
-              密码
-              <input name="password" type="password" autocomplete="new-password" minlength="6" required />
-            </label>
-            <label>
-              邀请码
-              <input name="inviteCode" autocomplete="off" required />
-            </label>
-            <button class="primary-button" type="submit">注册</button>
-          </form>
-
-          <button class="link-button" id="switchAuth" type="button">需要邀请码注册？</button>
-          <p class="notice" id="authNotice"></p>
-        </aside>
-
         <section class="content-view" id="homeView">
           <div class="section-heading">
             <div>
@@ -114,6 +72,55 @@
             <button class="primary-button" type="submit">提交到作品墙</button>
           </form>
           <p class="notice" id="submitNotice"></p>
+        </section>
+
+        <section class="content-view auth-view hidden" id="authView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Account</p>
+              <h2>用户入口</h2>
+            </div>
+            <p class="session-chip" id="sessionLabel">未登录</p>
+          </div>
+
+          <div class="auth-layout">
+            <form id="loginForm" class="stack auth-card">
+              <h3>登录</h3>
+              <label>
+                邮箱
+                <input name="email" type="email" autocomplete="email" required />
+              </label>
+              <label>
+                密码
+                <input name="password" type="password" autocomplete="current-password" minlength="6" required />
+              </label>
+              <button class="primary-button" type="submit">登录</button>
+            </form>
+
+            <form id="registerForm" class="stack auth-card hidden">
+              <h3>邀请码注册</h3>
+              <label>
+                昵称
+                <input name="displayName" autocomplete="nickname" required />
+              </label>
+              <label>
+                邮箱
+                <input name="email" type="email" autocomplete="email" required />
+              </label>
+              <label>
+                密码
+                <input name="password" type="password" autocomplete="new-password" minlength="6" required />
+              </label>
+              <label>
+                邀请码
+                <input name="inviteCode" autocomplete="off" required />
+              </label>
+              <button class="primary-button" type="submit">注册</button>
+            </form>
+          </div>
+
+          <button class="link-button" id="switchAuth" type="button">需要邀请码注册？</button>
+          <p class="notice" id="authNotice"></p>
         </section>
 
         <section class="content-view hidden" id="detailView">

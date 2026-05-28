@@ -52,6 +52,7 @@ const els = {
   authNotice: document.querySelector("#authNotice"),
   homeView: document.querySelector("#homeView"),
   submitView: document.querySelector("#submitView"),
+  authView: document.querySelector("#authView"),
   detailView: document.querySelector("#detailView"),
   galleryGrid: document.querySelector("#galleryGrid"),
   refreshGallery: document.querySelector("#refreshGallery"),
@@ -64,6 +65,16 @@ const els = {
 function setNotice(element, message, isError = false) {
   element.textContent = message;
   element.style.color = isError ? "#8f0000" : "";
+}
+
+function setFormBusy(form, isBusy, busyText) {
+  const button = form.querySelector('button[type="submit"]');
+  if (!button) return;
+  if (!button.dataset.defaultText) {
+    button.dataset.defaultText = button.textContent;
+  }
+  button.disabled = isBusy;
+  button.textContent = isBusy ? busyText : button.dataset.defaultText;
 }
 
 function formatScore(item) {
@@ -97,6 +108,7 @@ function setAuthMode(mode) {
 function showView(name) {
   els.homeView.classList.toggle("hidden", name !== "home");
   els.submitView.classList.toggle("hidden", name !== "submit");
+  els.authView.classList.toggle("hidden", name !== "auth");
   els.detailView.classList.toggle("hidden", name !== "detail");
   window.location.hash = name;
 }
@@ -215,13 +227,19 @@ async function handleLogin(event) {
     return;
   }
 
+  setFormBusy(event.currentTarget, true, "登录中...");
   const form = new FormData(event.currentTarget);
-  const { error } = await client.auth.signInWithPassword({
-    email: form.get("email"),
-    password: form.get("password"),
-  });
+  try {
+    const { error } = await client.auth.signInWithPassword({
+      email: form.get("email"),
+      password: form.get("password"),
+    });
 
-  setNotice(els.authNotice, error ? error.message : "登录成功。", Boolean(error));
+    setNotice(els.authNotice, error ? error.message : "登录成功。", Boolean(error));
+    if (!error) showView("home");
+  } finally {
+    setFormBusy(event.currentTarget, false);
+  }
 }
 
 async function handleRegister(event) {
@@ -231,36 +249,44 @@ async function handleRegister(event) {
     return;
   }
 
-  const form = new FormData(event.currentTarget);
-  const { data, error } = await client.functions.invoke("register-with-invite", {
-    body: {
-      email: form.get("email"),
-      password: form.get("password"),
-      displayName: form.get("displayName"),
-      inviteCode: form.get("inviteCode"),
-    },
-  });
+  setFormBusy(event.currentTarget, true, "注册中...");
+  try {
+    const form = new FormData(event.currentTarget);
+    const { data, error } = await client.functions.invoke("register-with-invite", {
+      body: {
+        email: form.get("email"),
+        password: form.get("password"),
+        displayName: form.get("displayName"),
+        inviteCode: form.get("inviteCode"),
+      },
+    });
 
-  if (error) {
-    let message = error.message;
-    if (error.context) {
-      try {
-        const details = await error.context.json();
-        message = details.error || details.message || message;
-      } catch (_parseError) {
-        message = error.message;
+    if (error) {
+      let message = error.message;
+      if (error.context) {
+        try {
+          const details = await error.context.json();
+          message = details.error || details.message || message;
+        } catch (_parseError) {
+          message = error.message;
+        }
       }
+      setNotice(els.authNotice, message, true);
+      return;
     }
-    setNotice(els.authNotice, message, true);
-    return;
-  }
 
-  setNotice(els.authNotice, data?.message || "注册成功，请登录。");
-  setAuthMode("login");
+    setNotice(els.authNotice, data?.message || "注册成功，请登录。");
+    setAuthMode("login");
+  } catch (error) {
+    setNotice(els.authNotice, error.message || "注册失败，请稍后重试。", true);
+  } finally {
+    setFormBusy(event.currentTarget, false);
+  }
 }
 
 async function handleSubmission(event) {
   event.preventDefault();
+  setNotice(els.submitNotice, "");
   if (!client) {
     setNotice(els.submitNotice, "演示模式无法上传，请先配置 Supabase。", true);
     return;
@@ -268,42 +294,55 @@ async function handleSubmission(event) {
 
   if (!state.session) {
     setNotice(els.submitNotice, "请先登录再提交。", true);
+    showView("auth");
     return;
   }
 
   const form = new FormData(event.currentTarget);
   const file = form.get("image");
-  const extension = file.name.split(".").pop();
-  const path = `${state.session.user.id}/${crypto.randomUUID()}.${extension}`;
-
-  const upload = await client.storage.from("submissions").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-  });
-
-  if (upload.error) {
-    setNotice(els.submitNotice, upload.error.message, true);
+  if (!(file instanceof File) || !file.size) {
+    setNotice(els.submitNotice, "请选择要上传的图片文件。", true);
     return;
   }
 
-  const { data } = client.storage.from("submissions").getPublicUrl(path);
-  const insert = await client.from("submissions").insert({
-    user_id: state.session.user.id,
-    title: form.get("title"),
-    description: form.get("description"),
-    image_path: path,
-    image_url: data.publicUrl,
-  });
+  setFormBusy(event.currentTarget, true, "提交中...");
+  try {
+    const extension = file.name.split(".").pop() || "png";
+    const path = `${state.session.user.id}/${crypto.randomUUID()}.${extension}`;
 
-  if (insert.error) {
-    setNotice(els.submitNotice, insert.error.message, true);
-    return;
+    const upload = await client.storage.from("submissions").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+    if (upload.error) {
+      setNotice(els.submitNotice, upload.error.message, true);
+      return;
+    }
+
+    const { data } = client.storage.from("submissions").getPublicUrl(path);
+    const insert = await client.from("submissions").insert({
+      user_id: state.session.user.id,
+      title: form.get("title"),
+      description: form.get("description"),
+      image_path: path,
+      image_url: data.publicUrl,
+    });
+
+    if (insert.error) {
+      setNotice(els.submitNotice, insert.error.message, true);
+      return;
+    }
+
+    event.currentTarget.reset();
+    setNotice(els.submitNotice, "提交成功，已展示到作品墙。");
+    await loadSubmissions();
+    showView("home");
+  } catch (error) {
+    setNotice(els.submitNotice, error.message || "提交失败，请稍后重试。", true);
+  } finally {
+    setFormBusy(event.currentTarget, false);
   }
-
-  event.currentTarget.reset();
-  setNotice(els.submitNotice, "提交成功，已展示到作品墙。");
-  await loadSubmissions();
-  showView("home");
 }
 
 async function initSession() {
@@ -333,10 +372,11 @@ els.switchAuth.addEventListener("click", () => {
 els.authToggle.addEventListener("click", async () => {
   if (!state.session) {
     setAuthMode("login");
-    document.querySelector("#authPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    showView("auth");
     return;
   }
   await client.auth.signOut();
+  showView("auth");
 });
 
 els.loginForm.addEventListener("submit", handleLogin);
@@ -347,3 +387,4 @@ els.refreshGallery.addEventListener("click", loadSubmissions);
 setAuthMode("login");
 initSession();
 loadSubmissions();
+showView(["home", "submit", "auth"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "home");

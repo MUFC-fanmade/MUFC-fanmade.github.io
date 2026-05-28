@@ -26,9 +26,11 @@ create table if not exists public.submissions (
   description text check (char_length(description) <= 500),
   image_path text not null,
   image_url text not null,
-  created_at timestamptz not null default now(),
-  unique (user_id)
+  created_at timestamptz not null default now()
 );
+
+alter table public.submissions
+drop constraint if exists submissions_user_id_key;
 
 create table if not exists public.ratings (
   id uuid primary key default gen_random_uuid(),
