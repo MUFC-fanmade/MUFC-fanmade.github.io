@@ -273,6 +273,75 @@ textarea {
   gap: 18px;
 }
 
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.profile-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.compact-heading {
+  margin-bottom: 14px;
+}
+
+.compact-heading h3 {
+  margin: 0;
+}
+
+.profile-list {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-item {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.profile-thumb {
+  width: 76px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #1f1d1b;
+}
+
+.profile-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-meta {
+  min-width: 0;
+}
+
+.profile-meta h4 {
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-meta p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .submission-card {
   overflow: hidden;
   background: var(--surface-strong);
@@ -392,6 +461,10 @@ textarea {
 
   .workspace {
     padding-top: 18px;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
   }
 
   .hero {

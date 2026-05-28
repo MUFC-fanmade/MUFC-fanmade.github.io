@@ -39,12 +39,15 @@ const demoSubmissions = [
 const state = {
   session: null,
   submissions: [],
+  ownSubmissions: [],
+  ownRatings: [],
   activeSubmission: null,
   authMode: "login",
 };
 
 const els = {
   authToggle: document.querySelector("#authToggle"),
+  profileNav: document.querySelector("#profileNav"),
   sessionLabel: document.querySelector("#sessionLabel"),
   loginForm: document.querySelector("#loginForm"),
   registerForm: document.querySelector("#registerForm"),
@@ -53,11 +56,18 @@ const els = {
   homeView: document.querySelector("#homeView"),
   submitView: document.querySelector("#submitView"),
   authView: document.querySelector("#authView"),
+  profileView: document.querySelector("#profileView"),
   detailView: document.querySelector("#detailView"),
   galleryGrid: document.querySelector("#galleryGrid"),
   refreshGallery: document.querySelector("#refreshGallery"),
+  refreshProfile: document.querySelector("#refreshProfile"),
   submissionForm: document.querySelector("#submissionForm"),
   submitNotice: document.querySelector("#submitNotice"),
+  profileNotice: document.querySelector("#profileNotice"),
+  mySubmissionsList: document.querySelector("#mySubmissionsList"),
+  myRatingsList: document.querySelector("#myRatingsList"),
+  mySubmissionCount: document.querySelector("#mySubmissionCount"),
+  myRatingCount: document.querySelector("#myRatingCount"),
   detailContent: document.querySelector("#detailContent"),
   cardTemplate: document.querySelector("#submissionCardTemplate"),
 };
@@ -95,6 +105,7 @@ function updateSessionUi() {
   const user = state.session?.user;
   els.sessionLabel.textContent = user ? user.email : "未登录";
   els.authToggle.textContent = user ? "退出" : "登录";
+  els.profileNav.classList.toggle("hidden", !user);
 }
 
 function setAuthMode(mode) {
@@ -106,11 +117,22 @@ function setAuthMode(mode) {
 }
 
 function showView(name) {
+  if (name === "profile" && !state.session) {
+    setNotice(els.authNotice, "请先登录再查看个人中心。", true);
+    setAuthMode("login");
+    name = "auth";
+  }
+
   els.homeView.classList.toggle("hidden", name !== "home");
   els.submitView.classList.toggle("hidden", name !== "submit");
   els.authView.classList.toggle("hidden", name !== "auth");
+  els.profileView.classList.toggle("hidden", name !== "profile");
   els.detailView.classList.toggle("hidden", name !== "detail");
   window.location.hash = name;
+
+  if (name === "profile") {
+    loadProfile();
+  }
 }
 
 function renderGallery() {
@@ -161,6 +183,138 @@ async function loadSubmissions() {
 
   state.submissions = data || [];
   renderGallery();
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function renderProfileList(container, items, emptyText, renderer) {
+  container.innerHTML = "";
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = emptyText;
+    container.append(empty);
+    return;
+  }
+
+  items.forEach((item) => container.append(renderer(item)));
+}
+
+function createProfileItem({ title, imageUrl, meta, detail, onOpen }) {
+  const item = document.createElement("article");
+  item.className = "profile-item";
+
+  const thumbButton = document.createElement("button");
+  thumbButton.className = "image-button profile-thumb";
+  thumbButton.type = "button";
+
+  const img = document.createElement("img");
+  img.src = imageUrl;
+  img.alt = title;
+  thumbButton.append(img);
+  thumbButton.addEventListener("click", onOpen);
+
+  const body = document.createElement("div");
+  body.className = "profile-meta";
+
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+
+  const metaLine = document.createElement("p");
+  metaLine.textContent = meta;
+
+  const detailLine = document.createElement("p");
+  detailLine.textContent = detail;
+
+  body.append(heading, metaLine, detailLine);
+  item.append(thumbButton, body);
+  return item;
+}
+
+async function loadProfile() {
+  if (!client) {
+    state.ownSubmissions = demoSubmissions.slice(0, 1);
+    state.ownRatings = [{ submission_id: "demo-2", score: 8.5, updated_at: new Date().toISOString() }];
+    renderProfile();
+    return;
+  }
+
+  if (!state.session) {
+    showView("auth");
+    return;
+  }
+
+  setNotice(els.profileNotice, "加载中...");
+  const [submissionsResult, ratingsResult] = await Promise.all([
+    client
+      .from("submissions")
+      .select("id,title,description,image_url,created_at")
+      .eq("user_id", state.session.user.id)
+      .order("created_at", { ascending: false }),
+    client
+      .from("ratings")
+      .select("submission_id,score,updated_at,created_at")
+      .eq("user_id", state.session.user.id)
+      .order("updated_at", { ascending: false }),
+  ]);
+
+  if (submissionsResult.error) {
+    setNotice(els.profileNotice, submissionsResult.error.message, true);
+    return;
+  }
+
+  if (ratingsResult.error) {
+    setNotice(els.profileNotice, ratingsResult.error.message, true);
+    return;
+  }
+
+  state.ownSubmissions = submissionsResult.data || [];
+  state.ownRatings = ratingsResult.data || [];
+  await loadSubmissions();
+  renderProfile();
+  setNotice(els.profileNotice, "");
+}
+
+function renderProfile() {
+  els.mySubmissionCount.textContent = state.ownSubmissions.length;
+  els.myRatingCount.textContent = state.ownRatings.length;
+
+  renderProfileList(
+    els.mySubmissionsList,
+    state.ownSubmissions,
+    "你还没有提交作品。",
+    (submission) =>
+      createProfileItem({
+        title: submission.title,
+        imageUrl: submission.image_url,
+        meta: `提交于 ${formatDate(submission.created_at)}`,
+        detail: submission.description || "未填写说明",
+        onOpen: () => openDetail(submission.id),
+      }),
+  );
+
+  renderProfileList(
+    els.myRatingsList,
+    state.ownRatings,
+    "你还没有评分记录。",
+    (rating) => {
+      const submission = state.submissions.find((item) => item.id === rating.submission_id);
+      return createProfileItem({
+        title: submission?.title || "已评分作品",
+        imageUrl: submission?.image_url || "",
+        meta: `我的评分 ${Number(rating.score).toFixed(1)} / 10`,
+        detail: `更新于 ${formatDate(rating.updated_at || rating.created_at)}`,
+        onOpen: () => submission && openDetail(submission.id),
+      });
+    },
+  );
 }
 
 function openDetail(id) {
@@ -218,6 +372,9 @@ async function submitRating(event) {
 
   await loadSubmissions();
   openDetail(state.activeSubmission.id);
+  if (!els.profileView.classList.contains("hidden")) {
+    await loadProfile();
+  }
 }
 
 async function handleLogin(event) {
@@ -337,7 +494,7 @@ async function handleSubmission(event) {
     event.currentTarget.reset();
     setNotice(els.submitNotice, "提交成功，已展示到作品墙。");
     await loadSubmissions();
-    showView("home");
+    showView("profile");
   } catch (error) {
     setNotice(els.submitNotice, error.message || "提交失败，请稍后重试。", true);
   } finally {
@@ -358,6 +515,10 @@ async function initSession() {
   client.auth.onAuthStateChange((_event, session) => {
     state.session = session;
     updateSessionUi();
+    if (!session) {
+      state.ownSubmissions = [];
+      state.ownRatings = [];
+    }
   });
 }
 
@@ -383,8 +544,13 @@ els.loginForm.addEventListener("submit", handleLogin);
 els.registerForm.addEventListener("submit", handleRegister);
 els.submissionForm.addEventListener("submit", handleSubmission);
 els.refreshGallery.addEventListener("click", loadSubmissions);
+els.refreshProfile.addEventListener("click", loadProfile);
 
-setAuthMode("login");
-initSession();
-loadSubmissions();
-showView(["home", "submit", "auth"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "home");
+async function initApp() {
+  setAuthMode("login");
+  await initSession();
+  await loadSubmissions();
+  showView(["home", "submit", "auth", "profile"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "home");
+}
+
+initApp();

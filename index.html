@@ -18,6 +18,7 @@
       <nav class="nav-actions">
         <button class="ghost-button" data-route="home">首页</button>
         <button class="ghost-button" data-route="submit">提交作品</button>
+        <button class="ghost-button hidden" id="profileNav" data-route="profile">个人中心</button>
         <button class="primary-button" id="authToggle" data-route="auth">登录</button>
       </nav>
     </header>
@@ -121,6 +122,36 @@
 
           <button class="link-button" id="switchAuth" type="button">需要邀请码注册？</button>
           <p class="notice" id="authNotice"></p>
+        </section>
+
+        <section class="content-view hidden" id="profileView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Profile</p>
+              <h2>个人中心</h2>
+            </div>
+            <button class="secondary-button" id="refreshProfile" type="button">刷新</button>
+          </div>
+
+          <div class="profile-grid">
+            <section class="profile-panel">
+              <div class="panel-heading compact-heading">
+                <h3>我的作品</h3>
+                <span class="score-pill" id="mySubmissionCount">0</span>
+              </div>
+              <div class="profile-list" id="mySubmissionsList"></div>
+            </section>
+
+            <section class="profile-panel">
+              <div class="panel-heading compact-heading">
+                <h3>我的评分</h3>
+                <span class="score-pill" id="myRatingCount">0</span>
+              </div>
+              <div class="profile-list" id="myRatingsList"></div>
+            </section>
+          </div>
+
+          <p class="notice" id="profileNotice"></p>
         </section>
 
         <section class="content-view hidden" id="detailView">

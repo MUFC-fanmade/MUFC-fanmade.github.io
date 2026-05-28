@@ -119,11 +119,12 @@ revoke execute on function public.claim_invite(text, uuid, text) from public, an
 
 grant select on public.submission_scores to anon, authenticated;
 grant select, update on public.profiles to authenticated;
-grant insert, update on public.submissions to authenticated;
+grant select, insert, update on public.submissions to authenticated;
 grant select, insert, update on public.ratings to authenticated;
 grant execute on function public.claim_invite(text, uuid, text) to service_role;
 
 drop policy if exists "profiles are readable by signed-in users" on public.profiles;
+drop policy if exists "users read own profile" on public.profiles;
 create policy "users read own profile"
 on public.profiles for select
 to authenticated
@@ -137,6 +138,12 @@ using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
 drop policy if exists "submissions are public" on public.submissions;
+
+drop policy if exists "users read own submissions" on public.submissions;
+create policy "users read own submissions"
+on public.submissions for select
+to authenticated
+using ((select auth.uid()) = user_id);
 
 drop policy if exists "users insert own submission" on public.submissions;
 create policy "users insert own submission"
