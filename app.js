@@ -1,35 +1,36 @@
 const config = window.MUFC_CONFIG || {};
+const publicKey = config.supabasePublishableKey || config.supabaseAnonKey;
 const hasSupabaseConfig =
   config.supabaseUrl &&
-  config.supabaseAnonKey &&
+  publicKey &&
   !config.supabaseUrl.includes("YOUR_PROJECT_REF");
 
 const client = hasSupabaseConfig
-  ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey)
+  ? window.supabase.createClient(config.supabaseUrl, publicKey)
   : null;
 
 const demoSubmissions = [
   {
     id: "demo-1",
-    title: "The Red Wall",
-    description: "观赛会入口的红色灯牌和围巾墙。",
-    image_url: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?auto=format&fit=crop&w=900&q=80",
+    title: "宴星回廊 Master",
+    description: "面向 13+ 难度的节奏型谱面展示图，重点表现交互段落与星形押法。",
+    image_url: "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=900&q=80",
     average_score: 9.2,
     rating_count: 18,
   },
   {
     id: "demo-2",
-    title: "Matchday Table",
-    description: "球迷桌牌、票根和赛前预测卡。",
-    image_url: "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=80",
+    title: "Campus Signal Re:Mix",
+    description: "高校主题原创曲的谱面概念图，强调副歌段落的滑键动线。",
+    image_url: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=900&q=80",
     average_score: 8.6,
     rating_count: 11,
   },
   {
     id: "demo-3",
-    title: "Away Kit Corner",
-    description: "复古客场球衣展示角。",
-    image_url: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=900&q=80",
+    title: "After Class DX",
+    description: "毕业生组参赛作品，截图展示了高潮段落的节奏密度设计。",
+    image_url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=900&q=80",
     average_score: 8.9,
     rating_count: 14,
   },
@@ -106,7 +107,7 @@ function renderGallery() {
   if (!state.submissions.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "还没有作品，成为第一个提交的人。";
+    empty.textContent = "还没有作品，成为第一个提交谱面的人。";
     els.galleryGrid.append(empty);
     return;
   }
@@ -291,7 +292,7 @@ async function handleSubmission(event) {
   }
 
   event.currentTarget.reset();
-  setNotice(els.submitNotice, "提交成功，已展示到首页。");
+  setNotice(els.submitNotice, "提交成功，已展示到作品墙。");
   await loadSubmissions();
   showView("home");
 }

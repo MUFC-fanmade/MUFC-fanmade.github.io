@@ -1,5 +1,8 @@
 create extension if not exists "pgcrypto";
 
+revoke all on schema public from public;
+grant usage on schema public to anon, authenticated, service_role;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null,
@@ -53,14 +56,11 @@ before update on public.ratings
 for each row execute function public.touch_updated_at();
 
 create or replace view public.submission_scores
-with (security_invoker = true)
 as
 select
   s.id,
-  s.user_id,
   s.title,
   s.description,
-  s.image_path,
   s.image_url,
   s.created_at,
   coalesce(round(avg(r.score)::numeric, 1), 0) as average_score,
@@ -108,11 +108,24 @@ alter table public.invite_codes enable row level security;
 alter table public.submissions enable row level security;
 alter table public.ratings enable row level security;
 
+revoke all on public.profiles from anon, authenticated;
+revoke all on public.invite_codes from anon, authenticated;
+revoke all on public.submissions from anon, authenticated;
+revoke all on public.ratings from anon, authenticated;
+revoke all on public.submission_scores from anon, authenticated;
+revoke execute on function public.claim_invite(text, uuid, text) from public, anon, authenticated;
+
+grant select on public.submission_scores to anon, authenticated;
+grant select, update on public.profiles to authenticated;
+grant insert, update on public.submissions to authenticated;
+grant select, insert, update on public.ratings to authenticated;
+grant execute on function public.claim_invite(text, uuid, text) to service_role;
+
 drop policy if exists "profiles are readable by signed-in users" on public.profiles;
-create policy "profiles are readable by signed-in users"
+create policy "users read own profile"
 on public.profiles for select
 to authenticated
-using (true);
+using ((select auth.uid()) = id);
 
 drop policy if exists "users update own profile" on public.profiles;
 create policy "users update own profile"
@@ -122,10 +135,6 @@ using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
 drop policy if exists "submissions are public" on public.submissions;
-create policy "submissions are public"
-on public.submissions for select
-to anon, authenticated
-using (true);
 
 drop policy if exists "users insert own submission" on public.submissions;
 create policy "users insert own submission"
@@ -141,10 +150,11 @@ using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
 drop policy if exists "ratings are public" on public.ratings;
-create policy "ratings are public"
+drop policy if exists "users read own rating" on public.ratings;
+create policy "users read own rating"
 on public.ratings for select
-to anon, authenticated
-using (true);
+to authenticated
+using ((select auth.uid()) = user_id);
 
 drop policy if exists "users rate as self" on public.ratings;
 create policy "users rate as self"

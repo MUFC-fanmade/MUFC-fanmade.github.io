@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MUFC Fan Venue</title>
+    <title>MUFC Chart Contest</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" href="styles.css" />
     <script src="config.js"></script>
@@ -11,9 +11,9 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#home" aria-label="MUFC Fan Venue home">
+      <a class="brand" href="#home" aria-label="MUFC Chart Contest home">
         <span class="crest">MU</span>
-        <span>MUFC Fan Venue</span>
+        <span>MUFC Chart Contest</span>
       </a>
       <nav class="nav-actions">
         <button class="ghost-button" data-route="home">首页</button>
@@ -25,13 +25,13 @@
     <main>
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Fan-made venue gallery</p>
-          <h1>把你的红魔瞬间带到会场首页</h1>
+          <p class="eyebrow">Multi-University Fanmade Contest</p>
+          <h1>高校舞萌 DX 谱面创作比赛作品墙</h1>
           <p>
-            受邀用户可以提交一张图片作品，所有登录用户都能进入详情页评分。页面会按评分与提交时间展示，适合作为小型线下活动、观赛会或创作征集入口。
+            面向高校在校生与毕业生的 fanmade 谱面创作活动。受邀用户可以提交一张谱面展示图，登录后可进入详情页评分，首页展示作品、均分与评分数量。
           </p>
           <div class="hero-actions">
-            <button class="primary-button" data-route="submit">上传作品</button>
+            <button class="primary-button" data-route="submit">提交谱面</button>
             <button class="secondary-button" data-route="home">浏览作品</button>
           </div>
         </div>
@@ -84,7 +84,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Gallery</p>
-              <h2>会场作品</h2>
+              <h2>参赛作品</h2>
             </div>
             <button class="secondary-button" id="refreshGallery" type="button">刷新</button>
           </div>
@@ -101,7 +101,7 @@
           <form id="submissionForm" class="submit-form">
             <label>
               标题
-              <input name="title" maxlength="80" required placeholder="例如：Old Trafford Night" />
+              <input name="title" maxlength="80" required placeholder="例如：宴星回廊 Master" />
             </label>
             <label>
               说明
@@ -111,7 +111,7 @@
               图片文件
               <input name="image" type="file" accept="image/png,image/jpeg,image/webp" required />
             </label>
-            <button class="primary-button" type="submit">提交到会场</button>
+            <button class="primary-button" type="submit">提交到作品墙</button>
           </form>
           <p class="notice" id="submitNotice"></p>
         </section>

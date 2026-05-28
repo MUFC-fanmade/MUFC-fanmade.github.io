@@ -1,6 +1,6 @@
-# MUFC Venue Site
+# MUFC Chart Contest Site
 
-Fan-made venue submission and rating site for GitHub Pages.
+Multi-University Fanmade Contest website for a college and alumni fanmade chart contest around the arcade rhythm game maimai DX.
 
 ## Architecture plan
 
@@ -10,7 +10,7 @@ Use GitHub Pages for the static frontend and Supabase as the backend service:
 - Supabase Postgres for profiles, invite codes, submissions, and ratings.
 - Supabase Storage for uploaded image files.
 - Supabase Edge Functions for invite-only registration, so the invite validation and admin user creation happen server-side.
-- Row Level Security policies to keep browser access scoped to the logged-in user.
+- Row Level Security policies and explicit grants to keep browser access scoped to the intended public API.
 
 This keeps hosting simple: GitHub Pages serves the site, while Supabase provides the API, database, auth, file storage, and small backend function layer.
 
@@ -19,10 +19,10 @@ This keeps hosting simple: GitHub Pages serves the site, while Supabase provides
 1. Create a Supabase project.
 2. Run `supabase/schema.sql` in the Supabase SQL editor.
 3. Deploy `supabase/functions/register-with-invite`.
-4. Fill in your Supabase URL and public anon key in `config.js`.
+4. Fill in your Supabase URL and public publishable key in `config.js`.
 6. Open `index.html` in a browser, or serve the folder with any static server.
 
-The Supabase anon key is safe to use in the browser when RLS is enabled. Never put the service role key in frontend files.
+The Supabase publishable key is safe to use in the browser when RLS and grants are configured correctly. Never put a secret key or service role key in frontend files.
 
 ## Deployment
 

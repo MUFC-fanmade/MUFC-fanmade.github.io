@@ -6,10 +6,10 @@
   --ink: #1f1d1b;
   --muted: #6f665c;
   --line: #ded4c5;
-  --red: #c70101;
-  --red-dark: #8f0000;
+  --accent: #e0447f;
+  --accent-dark: #b5265e;
   --gold: #f3c44f;
-  --green: #0c6b58;
+  --cyan: #007f8f;
   --shadow: 0 18px 50px rgb(46 28 14 / 14%);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -22,8 +22,8 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(135deg, rgb(199 1 1 / 8%), transparent 34%),
-    linear-gradient(315deg, rgb(12 107 88 / 8%), transparent 38%),
+    linear-gradient(135deg, rgb(224 68 127 / 10%), transparent 34%),
+    linear-gradient(315deg, rgb(0 127 143 / 10%), transparent 38%),
     var(--bg);
   color: var(--ink);
 }
@@ -67,7 +67,7 @@ button {
   height: 42px;
   place-items: center;
   border-radius: 50%;
-  background: var(--red);
+  background: var(--accent);
   color: white;
   box-shadow: inset 0 0 0 3px var(--gold);
   font-size: 14px;
@@ -95,12 +95,12 @@ button {
 }
 
 .primary-button {
-  background: var(--red);
+  background: var(--accent);
   color: #fff;
 }
 
 .primary-button:hover {
-  background: var(--red-dark);
+  background: var(--accent-dark);
 }
 
 .secondary-button {
@@ -127,7 +127,7 @@ button {
   color: #fff;
   background:
     linear-gradient(90deg, rgb(20 14 10 / 84%), rgb(20 14 10 / 36)),
-    url("https://images.unsplash.com/photo-1517927033932-b3d18e61fb3a?auto=format&fit=crop&w=1800&q=80") center/cover;
+    url("https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1800&q=80") center/cover;
 }
 
 .hero-copy {
@@ -297,8 +297,8 @@ textarea {
   min-height: 34px;
   border-radius: 999px;
   padding: 0 12px;
-  background: rgb(12 107 88 / 12%);
-  color: var(--green);
+  background: rgb(0 127 143 / 12%);
+  color: var(--cyan);
   font-weight: 800;
 }
 
