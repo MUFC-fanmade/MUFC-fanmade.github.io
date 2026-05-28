@@ -1,5 +1,31 @@
 .DS_Store
 Thumbs.db
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.cache/
+
+# Environment and secrets
 .env
 .env.*
-node_modules/
+*.env
+*.secret
+*.secret.*
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local-only project notes
+README.local.md
+README.private.md
+NOTES.local.md
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/functions/**/.env
