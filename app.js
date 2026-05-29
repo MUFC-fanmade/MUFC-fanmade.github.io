@@ -68,6 +68,8 @@ const els = {
   myRatingsList: document.querySelector("#myRatingsList"),
   mySubmissionCount: document.querySelector("#mySubmissionCount"),
   myRatingCount: document.querySelector("#myRatingCount"),
+  previewShell: document.querySelector("#previewShell"),
+  majdataFrame: document.querySelector("#majdataFrame"),
   detailContent: document.querySelector("#detailContent"),
   cardTemplate: document.querySelector("#submissionCardTemplate"),
 };
@@ -194,6 +196,26 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function getRequiredFile(form, fieldName, expectedNames) {
+  const file = form.get(fieldName);
+  if (!(file instanceof File) || !file.size) {
+    throw new Error(`请选择 ${expectedNames.join(" 或 ")}。`);
+  }
+  if (!expectedNames.includes(file.name)) {
+    throw new Error(`${fieldName} 文件名必须严格为 ${expectedNames.join(" 或 ")}。`);
+  }
+  return file;
+}
+
+function getOptionalFile(form, fieldName, expectedNames) {
+  const file = form.get(fieldName);
+  if (!(file instanceof File) || !file.size) return null;
+  if (!expectedNames.includes(file.name)) {
+    throw new Error(`${fieldName} 文件名必须严格为 ${expectedNames.join(" 或 ")}。`);
+  }
+  return file;
+}
+
 function renderProfileList(container, items, emptyText, renderer) {
   container.innerHTML = "";
   if (!items.length) {
@@ -255,7 +277,7 @@ async function loadProfile() {
   const [submissionsResult, ratingsResult] = await Promise.all([
     client
       .from("submissions")
-      .select("id,title,description,image_url,created_at")
+      .select("id,title,description,image_url,maidata_url,track_url,bg_url,pv_url,level,created_at")
       .eq("user_id", state.session.user.id)
       .order("created_at", { ascending: false }),
     client
@@ -322,6 +344,18 @@ function openDetail(id) {
   if (!item) return;
 
   state.activeSubmission = item;
+  const hasPreviewFiles = item.maidata_url && item.track_url && (item.bg_url || item.image_url);
+  els.previewShell.classList.toggle("hidden", !hasPreviewFiles);
+  els.majdataFrame.src = hasPreviewFiles
+    ? `majdata-player.html?${new URLSearchParams({
+        maidata: item.maidata_url,
+        track: item.track_url,
+        bg: item.bg_url || item.image_url,
+        pv: item.pv_url || "",
+        level: item.level || "0",
+      }).toString()}`
+    : "";
+
   els.detailContent.innerHTML = `
     <div class="detail-hero"><img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" /></div>
     <div>
@@ -455,35 +489,54 @@ async function handleSubmission(event) {
     return;
   }
 
-  const form = new FormData(event.currentTarget);
-  const file = form.get("image");
-  if (!(file instanceof File) || !file.size) {
-    setNotice(els.submitNotice, "请选择要上传的图片文件。", true);
-    return;
-  }
-
   setFormBusy(event.currentTarget, true, "提交中...");
   try {
-    const extension = file.name.split(".").pop() || "png";
-    const path = `${state.session.user.id}/${crypto.randomUUID()}.${extension}`;
+    const form = new FormData(event.currentTarget);
+    const maidata = getRequiredFile(form, "maidata", ["maidata.txt"]);
+    const track = getRequiredFile(form, "track", ["track.mp3"]);
+    const bg = getRequiredFile(form, "bg", ["bg.jpg", "bg.png"]);
+    const pv = getOptionalFile(form, "pv", ["pv.mp4"]);
+    const submissionId = crypto.randomUUID();
+    const basePath = `${state.session.user.id}/${submissionId}`;
+    const files = [
+      { key: "maidata", file: maidata, path: `${basePath}/maidata.txt` },
+      { key: "track", file: track, path: `${basePath}/track.mp3` },
+      { key: "bg", file: bg, path: `${basePath}/${bg.name}` },
+    ];
 
-    const upload = await client.storage.from("submissions").upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
-
-    if (upload.error) {
-      setNotice(els.submitNotice, upload.error.message, true);
-      return;
+    if (pv) {
+      files.push({ key: "pv", file: pv, path: `${basePath}/pv.mp4` });
     }
 
-    const { data } = client.storage.from("submissions").getPublicUrl(path);
+    const urls = {};
+    for (const entry of files) {
+      const upload = await client.storage.from("submissions").upload(entry.path, entry.file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+      if (upload.error) {
+        setNotice(els.submitNotice, upload.error.message, true);
+        return;
+      }
+
+      const { data } = client.storage.from("submissions").getPublicUrl(entry.path);
+      urls[entry.key] = data.publicUrl;
+    }
+
+    const bgPath = files.find((entry) => entry.key === "bg").path;
     const insert = await client.from("submissions").insert({
+      id: submissionId,
       user_id: state.session.user.id,
       title: form.get("title"),
       description: form.get("description"),
-      image_path: path,
-      image_url: data.publicUrl,
+      image_path: bgPath,
+      image_url: urls.bg,
+      maidata_url: urls.maidata,
+      track_url: urls.track,
+      bg_url: urls.bg,
+      pv_url: urls.pv || null,
+      level: "0",
     });
 
     if (insert.error) {

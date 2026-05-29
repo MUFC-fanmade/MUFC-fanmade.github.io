@@ -26,11 +26,23 @@ create table if not exists public.submissions (
   description text check (char_length(description) <= 500),
   image_path text not null,
   image_url text not null,
+  maidata_url text,
+  track_url text,
+  bg_url text,
+  pv_url text,
+  level text not null default '0',
   created_at timestamptz not null default now()
 );
 
 alter table public.submissions
 drop constraint if exists submissions_user_id_key;
+
+alter table public.submissions
+add column if not exists maidata_url text,
+add column if not exists track_url text,
+add column if not exists bg_url text,
+add column if not exists pv_url text,
+add column if not exists level text not null default '0';
 
 create table if not exists public.ratings (
   id uuid primary key default gen_random_uuid(),
@@ -57,13 +69,20 @@ create trigger ratings_touch_updated_at
 before update on public.ratings
 for each row execute function public.touch_updated_at();
 
-create or replace view public.submission_scores
+drop view if exists public.submission_scores;
+
+create view public.submission_scores
 as
 select
   s.id,
   s.title,
   s.description,
   s.image_url,
+  s.maidata_url,
+  s.track_url,
+  s.bg_url,
+  s.pv_url,
+  s.level,
   s.created_at,
   coalesce(round(avg(r.score)::numeric, 1), 0) as average_score,
   count(r.id)::int as rating_count

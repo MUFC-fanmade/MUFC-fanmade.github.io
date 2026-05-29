@@ -67,8 +67,20 @@
               <textarea name="description" maxlength="500" rows="5" placeholder="写一点作品背景"></textarea>
             </label>
             <label>
-              图片文件
-              <input name="image" type="file" accept="image/png,image/jpeg,image/webp" required />
+              maidata.txt
+              <input name="maidata" type="file" accept=".txt,text/plain" required />
+            </label>
+            <label>
+              track.mp3
+              <input name="track" type="file" accept="audio/mpeg,.mp3" required />
+            </label>
+            <label>
+              bg.jpg / bg.png
+              <input name="bg" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required />
+            </label>
+            <label>
+              pv.mp4（可选）
+              <input name="pv" type="file" accept="video/mp4,.mp4" />
             </label>
             <button class="primary-button" type="submit">提交到作品墙</button>
           </form>
@@ -156,6 +168,9 @@
 
         <section class="content-view hidden" id="detailView">
           <button class="link-button" data-route="home" type="button">返回首页</button>
+          <div class="preview-shell hidden" id="previewShell">
+            <iframe id="majdataFrame" title="Majdata chart preview" allow="autoplay; fullscreen"></iframe>
+          </div>
           <article class="detail" id="detailContent"></article>
         </section>
       </section>
