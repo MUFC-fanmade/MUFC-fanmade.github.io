@@ -413,13 +413,14 @@ async function submitRating(event) {
 
 async function handleLogin(event) {
   event.preventDefault();
+  const formElement = event.currentTarget;
   if (!client) {
     setNotice(els.authNotice, "请先配置 Supabase。", true);
     return;
   }
 
-  setFormBusy(event.currentTarget, true, "登录中...");
-  const form = new FormData(event.currentTarget);
+  setFormBusy(formElement, true, "登录中...");
+  const form = new FormData(formElement);
   try {
     const { error } = await client.auth.signInWithPassword({
       email: form.get("email"),
@@ -429,20 +430,21 @@ async function handleLogin(event) {
     setNotice(els.authNotice, error ? error.message : "登录成功。", Boolean(error));
     if (!error) showView("home");
   } finally {
-    setFormBusy(event.currentTarget, false);
+    setFormBusy(formElement, false);
   }
 }
 
 async function handleRegister(event) {
   event.preventDefault();
+  const formElement = event.currentTarget;
   if (!client) {
     setNotice(els.authNotice, "请先配置 Supabase。", true);
     return;
   }
 
-  setFormBusy(event.currentTarget, true, "注册中...");
+  setFormBusy(formElement, true, "注册中...");
   try {
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const { data, error } = await client.functions.invoke("register-with-invite", {
       body: {
         email: form.get("email"),
@@ -471,12 +473,13 @@ async function handleRegister(event) {
   } catch (error) {
     setNotice(els.authNotice, error.message || "注册失败，请稍后重试。", true);
   } finally {
-    setFormBusy(event.currentTarget, false);
+    setFormBusy(formElement, false);
   }
 }
 
 async function handleSubmission(event) {
   event.preventDefault();
+  const formElement = event.currentTarget;
   setNotice(els.submitNotice, "");
   if (!client) {
     setNotice(els.submitNotice, "演示模式无法上传，请先配置 Supabase。", true);
@@ -489,9 +492,9 @@ async function handleSubmission(event) {
     return;
   }
 
-  setFormBusy(event.currentTarget, true, "提交中...");
+  setFormBusy(formElement, true, "提交中...");
   try {
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const maidata = getRequiredFile(form, "maidata", ["maidata.txt"]);
     const track = getRequiredFile(form, "track", ["track.mp3"]);
     const bg = getRequiredFile(form, "bg", ["bg.jpg", "bg.png"]);
@@ -544,14 +547,14 @@ async function handleSubmission(event) {
       return;
     }
 
-    event.currentTarget.reset();
+    formElement.reset();
     setNotice(els.submitNotice, "提交成功，已展示到作品墙。");
     await loadSubmissions();
     showView("profile");
   } catch (error) {
     setNotice(els.submitNotice, error.message || "提交失败，请稍后重试。", true);
   } finally {
-    setFormBusy(event.currentTarget, false);
+    setFormBusy(formElement, false);
   }
 }
 
