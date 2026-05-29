@@ -10,9 +10,11 @@ Current features:
 
 - Invite-only registration through a Supabase Edge Function.
 - Email/password login through Supabase Auth.
-- Image submission to Supabase Storage.
+- Chart package submission to Supabase Storage: `maidata.txt`, `track.mp3`, `bg.jpg` / `bg.png`, and optional `pv.mp4`.
 - Submission metadata storage in Supabase Postgres.
 - Public homepage gallery backed by an aggregate score view.
+- Majdata WebGL chart preview on submission detail pages.
+- Multi-difficulty chart level switching parsed from `maidata.txt`.
 - Logged-in user rating flow with one rating per user per submission.
 
 ## Architecture
@@ -21,7 +23,7 @@ Use GitHub Pages for the static frontend and Supabase as the backend service:
 
 - Supabase Auth for email/password accounts.
 - Supabase Postgres for profiles, invite codes, submissions, and ratings.
-- Supabase Storage for uploaded image files.
+- Supabase Storage for uploaded chart package files.
 - Supabase Edge Functions for invite-only registration, so the invite validation and admin user creation happen server-side.
 - Row Level Security policies and explicit grants to keep browser access scoped to the intended public API.
 - JWT verification is disabled only for `register-with-invite` because registration happens before a user has a session; invite validation still happens server-side.
@@ -63,10 +65,11 @@ For GitHub Pages, publish from the repository root. Commit `index.html`, `styles
 1. Admin creates invite codes in `invite_codes`.
 2. Visitor registers with email, password, display name, and invite code.
 3. Edge Function validates and consumes the invite, then creates the Supabase Auth user.
-4. User logs in and uploads one image submission.
-5. Uploaded image is stored in Supabase Storage bucket `submissions`.
+4. User logs in and uploads a chart package with strict filenames.
+5. Uploaded chart files are stored in Supabase Storage bucket `submissions`.
 6. Submission metadata is saved to `submissions`.
-7. Logged-in users can rate submissions once; scores are aggregated on the homepage.
+7. Detail pages load the Majdata WebGL preview and parse available difficulties from `maidata.txt`.
+8. Logged-in users can rate submissions once; scores are aggregated on the homepage.
 
 ## Changelog
 
@@ -77,3 +80,11 @@ For GitHub Pages, publish from the repository root. Commit `index.html`, `styles
 - Corrected MUFC branding to Multi-University Fanmade Contest for maimai DX fanmade chart submissions.
 - Tightened public data access so the frontend reads only aggregate submission score data.
 - Added local-only documentation and stronger ignore rules for secrets and private development notes.
+
+### 2026-05-30
+
+- Added chart package uploads with strict file names: `maidata.txt`, `track.mp3`, `bg.jpg` / `bg.png`, optional `pv.mp4`.
+- Integrated the Majdata WebGL chart preview into detail pages.
+- Fixed Majdata difficulty mapping from `maidata` levels (`lv_1`-`lv_7`) to Unity levels (`lv0`-`lv6`).
+- Added multi-difficulty buttons that display the chart's actual difficulty value and switch the current player level.
+- Reworked chart detail pages into a full-width subpage layout separate from the homepage venue wall.

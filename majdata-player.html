@@ -27,78 +27,87 @@
         width: 100%;
         height: 100%;
         background: #050509;
+        outline: 0;
       }
 
-      #loading,
-      #controls {
+      #diagnostics {
         position: fixed;
         left: 16px;
+        bottom: 16px;
         z-index: 2;
+        max-width: min(520px, calc(100vw - 32px));
         border-radius: 8px;
         padding: 10px 12px;
-        background: rgb(0 0 0 / 72%);
-        font-size: 14px;
+        background: rgb(0 0 0 / 76%);
+        color: rgb(255 255 255 / 88%);
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        pointer-events: none;
+        display: none;
       }
 
-      #loading {
-        bottom: 16px;
-      }
-
-      #controls {
-        top: 16px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      button {
-        min-height: 36px;
-        border: 0;
-        border-radius: 8px;
-        padding: 0 12px;
-        background: #e0447f;
-        color: white;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 700;
-      }
-
-      button:disabled {
-        cursor: not-allowed;
-        opacity: 0.58;
-      }
-
-      #chart-status {
-        color: rgb(255 255 255 / 82%);
+      #diagnostics.is-visible {
+        display: block;
       }
     </style>
   </head>
   <body>
     <div id="unity-container">
-      <canvas id="unity-canvas" tabindex="-1"></canvas>
+      <canvas id="unity-canvas" tabindex="0"></canvas>
     </div>
-    <div id="controls">
-      <button id="load-chart" type="button" disabled>加载当前谱面</button>
-      <span id="chart-status">等待播放器加载</span>
-    </div>
-    <div id="loading">Loading Majdata...</div>
+    <div id="diagnostics">Loading Majdata...</div>
 
     <script src="WebGLBuild/Build.loader.js"></script>
     <script>
       const query = new URLSearchParams(location.search);
+      const rawLevel = query.get("level") || "lv_5";
+      const debugEnabled =
+        query.get("debug") === "1" || localStorage.getItem("mufc:majdata-debug") === "1";
+
+      function toUnityLevel(level) {
+        const value = String(level || "").trim();
+        const maidataMatch = value.match(/^lv_(\d+)$/i);
+        if (maidataMatch) {
+          const maidataIndex = Number(maidataMatch[1]);
+          return `lv${Math.max(0, maidataIndex - 1)}`;
+        }
+
+        if (/^lv\d+$/i.test(value)) return value.toLowerCase();
+        if (/^\d+$/.test(value)) return `lv${Math.max(0, Number(value) - 1)}`;
+
+        const namedLevels = {
+          easy: 0,
+          basic: 1,
+          advanced: 2,
+          expert: 3,
+          master: 4,
+          "re:master": 5,
+          remaster: 5,
+          utage: 6,
+          original: 6,
+        };
+        const mapped = namedLevels[value.toLowerCase()];
+        return `lv${mapped ?? 4}`;
+      }
+
+      const unityLevel = toUnityLevel(rawLevel);
       const chart = {
         maidata: query.get("maidata") || "",
         track: query.get("track") || "",
         bg: query.get("bg") || "",
         pv: query.get("pv") || "",
-        level: query.get("level") || "0",
+        maidataLevel: rawLevel,
+        unityLevel,
       };
 
-      const loading = document.querySelector("#loading");
-      const loadButton = document.querySelector("#load-chart");
-      const chartStatus = document.querySelector("#chart-status");
+      const diagnostics = document.querySelector("#diagnostics");
+      diagnostics.classList.toggle("is-visible", debugEnabled);
       const canvas = document.querySelector("#unity-canvas");
-      let activeUnityInstance = null;
+      const lines = [];
+      let didSendChart = false;
+      let pendingChartPayload = null;
+
       const config = {
         dataUrl: "WebGLBuild/Build.data",
         frameworkUrl: "WebGLBuild/Build.framework.js",
@@ -109,37 +118,121 @@
         productVersion: "1.0",
       };
 
-      function sendChart(unityInstance) {
-        if (!chart.maidata || !chart.track || !chart.bg) {
-          chartStatus.textContent = "缺少 maidata / track / bg 文件";
-          return;
+      function logStatus(message) {
+        lines.push(message);
+        if (debugEnabled) {
+          diagnostics.textContent = lines.slice(-8).join("\n");
         }
-        const message = [chart.maidata, chart.track, chart.bg, chart.pv, chart.level].join("\n");
-        unityInstance.SendMessage("HandleJSMessages", "ReceiveMessage", message);
-        chartStatus.textContent = "已发送谱面加载请求";
+        console.log(`[MUFC Majdata] ${message}`);
       }
 
-      loadButton.addEventListener("click", () => {
-        if (activeUnityInstance) {
-          sendChart(activeUnityInstance);
+      async function assertFetchable(label, url, options = {}) {
+        if (!url) throw new Error(`${label} url is missing`);
+        const response = await fetch(url, { cache: "no-store", ...options });
+        if (!response.ok) throw new Error(`${label} fetch failed: ${response.status}`);
+        return response;
+      }
+
+      async function verifyChartFiles() {
+        logStatus(`Maidata level: ${chart.maidataLevel}`);
+        logStatus(`Unity level: ${chart.unityLevel}`);
+
+        const maidataResponse = await assertFetchable("maidata", chart.maidata);
+        const maidataText = (await maidataResponse.text()).replace(/^\uFEFF/, "");
+        const levelIndex = chart.maidataLevel.match(/^lv_(\d+)$/i)?.[1] || String(Number(chart.unityLevel.replace(/^lv/, "")) + 1);
+        const hasLevel = new RegExp(`^&lv_${levelIndex}=`, "m").test(maidataText);
+        const hasNotes = new RegExp(`^&inote_${levelIndex}=`, "m").test(maidataText);
+        logStatus(`maidata ok: lv_${levelIndex}=${hasLevel}, inote_${levelIndex}=${hasNotes}`);
+
+        await assertFetchable("track", chart.track, { method: "HEAD" });
+        logStatus("track ok");
+
+        await assertFetchable("bg", chart.bg, { method: "HEAD" });
+        logStatus("background ok");
+
+        if (chart.pv) {
+          await assertFetchable("pv", chart.pv, { method: "HEAD" });
+          logStatus("pv ok");
+        } else {
+          logStatus("pv skipped");
+        }
+      }
+
+      function updateChart(payload) {
+        chart.maidata = payload.maidata || chart.maidata;
+        chart.track = payload.track || chart.track;
+        chart.bg = payload.bg || chart.bg;
+        chart.pv = payload.pv || "";
+        chart.maidataLevel = payload.level || payload.maidataLevel || chart.maidataLevel;
+        chart.unityLevel = payload.unityLevel || toUnityLevel(chart.maidataLevel);
+        didSendChart = false;
+      }
+
+      async function loadChart(unityInstance, delay = 500) {
+        await verifyChartFiles();
+        setTimeout(() => sendChart(unityInstance), delay);
+      }
+
+      function sendChart(unityInstance) {
+        if (didSendChart) return;
+        if (!chart.maidata || !chart.track || !chart.bg) {
+          logStatus("missing maidata / track / bg");
+          return;
+        }
+
+        didSendChart = true;
+        const message = [chart.maidata, chart.track, chart.bg, chart.pv, chart.unityLevel].join("\n");
+        unityInstance.SendMessage("HandleJSMessages", "ReceiveMessage", message);
+        logStatus("chart message sent once");
+        logStatus("If it shows only the player shell, click/tap the player once to unlock audio.");
+      }
+
+      window.addEventListener("message", (event) => {
+        if (!event.data || event.data.type !== "LoadChart") return;
+        pendingChartPayload = event.data;
+        if (window.activeUnityInstance?.SendMessage) {
+          updateChart(pendingChartPayload);
+          pendingChartPayload = null;
+          loadChart(window.activeUnityInstance, 200).catch((error) => logStatus(error?.message || String(error)));
         }
       });
 
+      canvas.addEventListener("pointerdown", () => {
+        canvas.focus();
+        logStatus("player clicked");
+        if (window.activeUnityInstance?.SendMessage) {
+          window.activeUnityInstance.SendMessage(
+            "HandleJSMessages",
+            "ReceiveMessage",
+            JSON.stringify({ type: "UnityAudioUnlocked" }),
+          );
+          logStatus("audio unlock message sent");
+        }
+      });
+
+      const preflight = verifyChartFiles().catch((error) => {
+        logStatus(error?.message || String(error));
+        throw error;
+      });
+
       createUnityInstance(canvas, config, (progress) => {
-        loading.textContent = `Loading Majdata ${(progress * 100).toFixed(0)}%`;
+        if (debugEnabled) {
+          diagnostics.textContent = `Loading Majdata ${(progress * 100).toFixed(0)}%\n${lines.slice(-6).join("\n")}`;
+        }
       })
-        .then((unityInstance) => {
-          activeUnityInstance = unityInstance;
-          loadButton.disabled = false;
-          chartStatus.textContent = "播放器已就绪";
-          loading.textContent = "Loading chart...";
-          setTimeout(() => {
-            sendChart(unityInstance);
-            loading.style.display = "none";
-          }, 1200);
+        .then(async (unityInstance) => {
+          window.activeUnityInstance = unityInstance;
+          logStatus("unity loaded");
+          if (pendingChartPayload) {
+            updateChart(pendingChartPayload);
+            pendingChartPayload = null;
+          } else {
+            await preflight;
+          }
+          setTimeout(() => sendChart(unityInstance), 650);
         })
         .catch((error) => {
-          loading.textContent = error?.message || String(error);
+          logStatus(error?.message || String(error));
         });
     </script>
   </body>

@@ -167,9 +167,25 @@
         </section>
 
         <section class="content-view hidden" id="detailView">
-          <button class="link-button" data-route="home" type="button">返回首页</button>
+          <div class="detail-toolbar">
+            <button class="link-button" data-route="home" type="button">返回首页</button>
+          </div>
           <div class="preview-shell hidden" id="previewShell">
             <iframe id="majdataFrame" title="Majdata chart preview" allow="autoplay; fullscreen"></iframe>
+          </div>
+          <div class="chart-detail-strip">
+            <div class="chart-artwork" id="chartArtwork"></div>
+            <section class="chart-level-panel hidden" id="chartLevelPanel">
+              <div class="panel-heading compact-heading">
+                <h3>谱面详情</h3>
+                <span class="score-pill" id="chartLevelCount">0</span>
+              </div>
+              <div class="level-button-row" id="chartLevelButtons"></div>
+              <p class="notice" id="chartLevelNotice"></p>
+            </section>
+            <div class="chart-level-panel hidden" id="chartLevelFallback">
+              <p class="notice" id="chartLevelFallbackText"></p>
+            </div>
           </div>
           <article class="detail" id="detailContent"></article>
         </section>
@@ -192,6 +208,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260530-load-button"></script>
+    <script src="app.js?v=20260530-detail-layout"></script>
   </body>
 </html>

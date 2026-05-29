@@ -30,7 +30,7 @@ create table if not exists public.submissions (
   track_url text,
   bg_url text,
   pv_url text,
-  level text not null default '0',
+  level text not null default 'lv_5',
   created_at timestamptz not null default now()
 );
 
@@ -42,7 +42,10 @@ add column if not exists maidata_url text,
 add column if not exists track_url text,
 add column if not exists bg_url text,
 add column if not exists pv_url text,
-add column if not exists level text not null default '0';
+add column if not exists level text not null default 'lv_5';
+
+alter table public.submissions
+alter column level set default 'lv_5';
 
 create table if not exists public.ratings (
   id uuid primary key default gen_random_uuid(),

@@ -42,6 +42,8 @@ const state = {
   ownSubmissions: [],
   ownRatings: [],
   activeSubmission: null,
+  activeChartLevels: [],
+  activeChartLevel: null,
   authMode: "login",
 };
 
@@ -70,6 +72,13 @@ const els = {
   myRatingCount: document.querySelector("#myRatingCount"),
   previewShell: document.querySelector("#previewShell"),
   majdataFrame: document.querySelector("#majdataFrame"),
+  chartArtwork: document.querySelector("#chartArtwork"),
+  chartLevelPanel: document.querySelector("#chartLevelPanel"),
+  chartLevelFallback: document.querySelector("#chartLevelFallback"),
+  chartLevelFallbackText: document.querySelector("#chartLevelFallbackText"),
+  chartLevelButtons: document.querySelector("#chartLevelButtons"),
+  chartLevelCount: document.querySelector("#chartLevelCount"),
+  chartLevelNotice: document.querySelector("#chartLevelNotice"),
   detailContent: document.querySelector("#detailContent"),
   cardTemplate: document.querySelector("#submissionCardTemplate"),
 };
@@ -130,6 +139,7 @@ function showView(name) {
   els.authView.classList.toggle("hidden", name !== "auth");
   els.profileView.classList.toggle("hidden", name !== "profile");
   els.detailView.classList.toggle("hidden", name !== "detail");
+  document.body.classList.toggle("is-detail-view", name === "detail");
   window.location.hash = name;
 
   if (name === "profile") {
@@ -214,6 +224,71 @@ function getOptionalFile(form, fieldName, expectedNames) {
     throw new Error(`${fieldName} 文件名必须严格为 ${expectedNames.join(" 或 ")}。`);
   }
   return file;
+}
+
+async function detectDefaultMajdataLevel(maidataFile) {
+  const text = await maidataFile.text();
+  const inoteMatches = [...text.matchAll(/^&inote_(\d+)=/gm)].map((match) => Number(match[1]));
+  const levelMatches = [...text.matchAll(/^&lv_(\d+)=/gm)].map((match) => Number(match[1]));
+  const available = new Set([...inoteMatches, ...levelMatches]);
+
+  if (available.has(5)) return "lv_5";
+  if (!available.size) return "lv_5";
+
+  const highestLevel = Math.max(...available);
+  return `lv_${highestLevel}`;
+}
+
+function getUnityLevel(maidataLevel) {
+  const match = String(maidataLevel || "").match(/^lv_(\d+)$/i);
+  if (match) return `lv${Math.max(0, Number(match[1]) - 1)}`;
+  const direct = String(maidataLevel || "").match(/^lv(\d+)$/i);
+  if (direct) return `lv${Number(direct[1])}`;
+  return "lv4";
+}
+
+function getLevelName(index) {
+  const names = {
+    1: "EASY",
+    2: "BASIC",
+    3: "ADVANCED",
+    4: "EXPERT",
+    5: "MASTER",
+    6: "RE:MASTER",
+    7: "UTAGE",
+  };
+  return names[index] || `LV ${index}`;
+}
+
+function parseMajdataLevels(text) {
+  const normalized = String(text || "").replace(/^\uFEFF/, "");
+  const values = new Map();
+  const notes = new Set();
+
+  for (const match of normalized.matchAll(/^&lv_(\d+)=(.*)$/gm)) {
+    values.set(Number(match[1]), match[2].trim());
+  }
+
+  for (const match of normalized.matchAll(/^&inote_(\d+)=/gm)) {
+    notes.add(Number(match[1]));
+  }
+
+  return [...values.entries()]
+    .filter(([index]) => notes.has(index))
+    .sort(([a], [b]) => a - b)
+    .map(([index, value]) => ({
+      index,
+      maidataLevel: `lv_${index}`,
+      unityLevel: `lv${Math.max(0, index - 1)}`,
+      name: getLevelName(index),
+      value: value || "-",
+    }));
+}
+
+async function loadMajdataLevels(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`maidata ${response.status}`);
+  return parseMajdataLevels(await response.text());
 }
 
 function renderProfileList(container, items, emptyText, renderer) {
@@ -339,31 +414,94 @@ function renderProfile() {
   );
 }
 
-function openDetail(id) {
+function buildPlayerUrl(item, maidataLevel) {
+  return `majdata-player.html?${new URLSearchParams({
+    v: "20260530-detail-layout",
+    maidata: item.maidata_url,
+    track: item.track_url,
+    bg: item.bg_url || item.image_url,
+    pv: item.pv_url || "",
+    level: maidataLevel || "lv_5",
+  }).toString()}`;
+}
+
+function getChartPayload(item, maidataLevel) {
+  return {
+    type: "LoadChart",
+    maidata: item.maidata_url,
+    track: item.track_url,
+    bg: item.bg_url || item.image_url,
+    pv: item.pv_url || "",
+    level: maidataLevel || "lv_5",
+    unityLevel: getUnityLevel(maidataLevel || "lv_5"),
+  };
+}
+
+function renderChartLevelPanel() {
+  const levels = state.activeChartLevels;
+  const activeLevel = state.activeChartLevel;
+
+  els.chartLevelPanel.classList.toggle("hidden", !levels.length);
+  els.chartLevelFallback.classList.add("hidden");
+  els.chartLevelButtons.innerHTML = "";
+  els.chartLevelCount.textContent = levels.length ? `${levels.length}` : "0";
+  els.chartLevelNotice.textContent = "";
+  els.chartLevelNotice.classList.add("hidden");
+
+  levels.forEach((level) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `level-button${level.maidataLevel === activeLevel ? " is-active" : ""}`;
+    button.dataset.level = level.maidataLevel;
+    button.innerHTML = `
+      <strong>${escapeHtml(level.value)}</strong>
+      <span>${escapeHtml(level.name)}</span>
+    `;
+    button.addEventListener("click", () => switchChartLevel(level.maidataLevel));
+    els.chartLevelButtons.append(button);
+  });
+}
+
+function switchChartLevel(maidataLevel) {
+  const item = state.activeSubmission;
+  if (!item || state.activeChartLevel === maidataLevel) return;
+
+  state.activeChartLevel = maidataLevel;
+  renderChartLevelPanel();
+
+  const payload = getChartPayload(item, maidataLevel);
+  if (els.majdataFrame.contentWindow) {
+    els.majdataFrame.contentWindow.postMessage(payload, "*");
+    return;
+  }
+
+  els.majdataFrame.src = buildPlayerUrl(item, maidataLevel);
+}
+
+async function openDetail(id) {
   const item = state.submissions.find((entry) => entry.id === id);
   if (!item) return;
 
   state.activeSubmission = item;
+  state.activeChartLevels = [];
+  state.activeChartLevel = item.level || "lv_5";
   const hasPreviewFiles = item.maidata_url && item.track_url && (item.bg_url || item.image_url);
   els.previewShell.classList.toggle("hidden", !hasPreviewFiles);
-  els.majdataFrame.src = hasPreviewFiles
-    ? `majdata-player.html?${new URLSearchParams({
-        v: "20260530-load-button",
-        maidata: item.maidata_url,
-        track: item.track_url,
-        bg: item.bg_url || item.image_url,
-        pv: item.pv_url || "",
-        level: item.level || "0",
-      }).toString()}`
-    : "";
+  els.chartLevelPanel.classList.add("hidden");
+  els.chartLevelFallback.classList.toggle("hidden", hasPreviewFiles);
+  els.chartLevelFallbackText.textContent = hasPreviewFiles ? "" : "这个作品缺少谱面预览文件。";
+  els.chartLevelButtons.innerHTML = "";
+  els.chartLevelNotice.textContent = hasPreviewFiles ? "Loading chart levels..." : "";
+  els.chartLevelNotice.classList.toggle("hidden", !hasPreviewFiles);
+  els.majdataFrame.src = hasPreviewFiles ? buildPlayerUrl(item, state.activeChartLevel) : "";
+  els.chartArtwork.innerHTML = `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" />`;
 
   els.detailContent.innerHTML = `
-    <div class="detail-hero"><img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" /></div>
-    <div>
+    <section class="detail-info">
       <p class="eyebrow">Score ${formatScore(item)}</p>
       <h2>${escapeHtml(item.title)}</h2>
       <p>${escapeHtml(item.description || "未填写说明")}</p>
-    </div>
+    </section>
     <div class="rating-box">
       <div>
         <strong>给这个作品评分</strong>
@@ -378,6 +516,36 @@ function openDetail(id) {
 
   document.querySelector("#ratingForm").addEventListener("submit", submitRating);
   showView("detail");
+  window.location.hash = `detail=${encodeURIComponent(item.id)}`;
+
+  if (!hasPreviewFiles) return;
+
+  try {
+    const levels = await loadMajdataLevels(item.maidata_url);
+    if (state.activeSubmission?.id !== item.id) return;
+
+    state.activeChartLevels = levels;
+    const current = levels.find((level) => level.maidataLevel === state.activeChartLevel);
+    const fallback =
+      levels.find((level) => level.maidataLevel === "lv_5") ||
+      levels[levels.length - 1] ||
+      null;
+
+    state.activeChartLevel = (current || fallback)?.maidataLevel || state.activeChartLevel;
+    renderChartLevelPanel();
+
+    if (!current && fallback) {
+      els.majdataFrame.src = buildPlayerUrl(item, state.activeChartLevel);
+    }
+  } catch (error) {
+    if (state.activeSubmission?.id !== item.id) return;
+    els.chartLevelPanel.classList.remove("hidden");
+    els.chartLevelFallback.classList.add("hidden");
+    els.chartLevelCount.textContent = "0";
+    els.chartLevelButtons.innerHTML = "";
+    els.chartLevelNotice.textContent = `Failed to load chart levels: ${error.message || error}`;
+    els.chartLevelNotice.classList.remove("hidden");
+  }
 }
 
 async function submitRating(event) {
@@ -500,6 +668,7 @@ async function handleSubmission(event) {
     const track = getRequiredFile(form, "track", ["track.mp3"]);
     const bg = getRequiredFile(form, "bg", ["bg.jpg", "bg.png"]);
     const pv = getOptionalFile(form, "pv", ["pv.mp4"]);
+    const defaultLevel = await detectDefaultMajdataLevel(maidata);
     const submissionId = crypto.randomUUID();
     const basePath = `${state.session.user.id}/${submissionId}`;
     const files = [
@@ -540,7 +709,7 @@ async function handleSubmission(event) {
       track_url: urls.track,
       bg_url: urls.bg,
       pv_url: urls.pv || null,
-      level: "0",
+      level: defaultLevel,
     });
 
     if (insert.error) {
@@ -607,7 +776,12 @@ async function initApp() {
   setAuthMode("login");
   await initSession();
   await loadSubmissions();
-  showView(["home", "submit", "auth", "profile"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "home");
+  const route = location.hash.slice(1);
+  if (route.startsWith("detail=")) {
+    await openDetail(decodeURIComponent(route.slice("detail=".length)));
+    return;
+  }
+  showView(["home", "submit", "auth", "profile"].includes(route) ? route : "home");
 }
 
 initApp();
