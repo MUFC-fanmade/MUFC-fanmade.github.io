@@ -348,6 +348,7 @@ function openDetail(id) {
   els.previewShell.classList.toggle("hidden", !hasPreviewFiles);
   els.majdataFrame.src = hasPreviewFiles
     ? `majdata-player.html?${new URLSearchParams({
+        v: "20260530-load-button",
         maidata: item.maidata_url,
         track: item.track_url,
         bg: item.bg_url || item.image_url,

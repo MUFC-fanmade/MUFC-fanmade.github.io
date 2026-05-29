@@ -29,21 +29,57 @@
         background: #050509;
       }
 
-      #loading {
+      #loading,
+      #controls {
         position: fixed;
         left: 16px;
-        bottom: 16px;
         z-index: 2;
         border-radius: 8px;
         padding: 10px 12px;
         background: rgb(0 0 0 / 72%);
         font-size: 14px;
       }
+
+      #loading {
+        bottom: 16px;
+      }
+
+      #controls {
+        top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      button {
+        min-height: 36px;
+        border: 0;
+        border-radius: 8px;
+        padding: 0 12px;
+        background: #e0447f;
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
+      }
+
+      #chart-status {
+        color: rgb(255 255 255 / 82%);
+      }
     </style>
   </head>
   <body>
     <div id="unity-container">
       <canvas id="unity-canvas" tabindex="-1"></canvas>
+    </div>
+    <div id="controls">
+      <button id="load-chart" type="button" disabled>加载当前谱面</button>
+      <span id="chart-status">等待播放器加载</span>
     </div>
     <div id="loading">Loading Majdata...</div>
 
@@ -59,7 +95,10 @@
       };
 
       const loading = document.querySelector("#loading");
+      const loadButton = document.querySelector("#load-chart");
+      const chartStatus = document.querySelector("#chart-status");
       const canvas = document.querySelector("#unity-canvas");
+      let activeUnityInstance = null;
       const config = {
         dataUrl: "WebGLBuild/Build.data",
         frameworkUrl: "WebGLBuild/Build.framework.js",
@@ -71,19 +110,33 @@
       };
 
       function sendChart(unityInstance) {
+        if (!chart.maidata || !chart.track || !chart.bg) {
+          chartStatus.textContent = "缺少 maidata / track / bg 文件";
+          return;
+        }
         const message = [chart.maidata, chart.track, chart.bg, chart.pv, chart.level].join("\n");
         unityInstance.SendMessage("HandleJSMessages", "ReceiveMessage", message);
+        chartStatus.textContent = "已发送谱面加载请求";
       }
+
+      loadButton.addEventListener("click", () => {
+        if (activeUnityInstance) {
+          sendChart(activeUnityInstance);
+        }
+      });
 
       createUnityInstance(canvas, config, (progress) => {
         loading.textContent = `Loading Majdata ${(progress * 100).toFixed(0)}%`;
       })
         .then((unityInstance) => {
+          activeUnityInstance = unityInstance;
+          loadButton.disabled = false;
+          chartStatus.textContent = "播放器已就绪";
           loading.textContent = "Loading chart...";
           setTimeout(() => {
             sendChart(unityInstance);
             loading.style.display = "none";
-          }, 500);
+          }, 1200);
         })
         .catch((error) => {
           loading.textContent = error?.message || String(error);
