@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="styles.css" />
     <script src="config.js?v=20260530-chartpack"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
   </head>
   <body>
     <header class="topbar">
@@ -19,6 +21,7 @@
         <button class="ghost-button" data-route="home">首页</button>
         <button class="ghost-button" data-route="submit">提交作品</button>
         <button class="ghost-button hidden" id="profileNav" data-route="profile">个人中心</button>
+        <button class="ghost-button hidden" id="adminNav" data-route="admin">管理后台</button>
         <button class="primary-button" id="authToggle" data-route="auth">登录</button>
       </nav>
     </header>
@@ -145,6 +148,29 @@
             <button class="secondary-button" id="refreshProfile" type="button">刷新</button>
           </div>
 
+          <section class="profile-panel account-panel">
+            <div class="account-summary">
+              <div class="account-avatar" id="profileAvatar">MU</div>
+              <div>
+                <p class="eyebrow">Account</p>
+                <h3 id="profileDisplayName">未登录</h3>
+                <p id="profileEmail" class="notice">-</p>
+              </div>
+            </div>
+
+            <form class="account-form" id="profileForm">
+              <label>
+                昵称
+                <input name="displayName" maxlength="40" required />
+              </label>
+              <label>
+                头像（不超过 2MB）
+                <input name="avatar" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+              </label>
+              <button class="primary-button" type="submit">保存个人资料</button>
+            </form>
+          </section>
+
           <div class="profile-grid">
             <section class="profile-panel">
               <div class="panel-heading compact-heading">
@@ -189,6 +215,54 @@
           </div>
           <article class="detail" id="detailContent"></article>
         </section>
+
+        <section class="content-view hidden" id="adminView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Admin</p>
+              <h2>管理后台</h2>
+            </div>
+            <button class="secondary-button" id="refreshAdmin" type="button">刷新</button>
+          </div>
+
+          <div class="admin-tabs" role="tablist" aria-label="管理后台数据切换">
+            <button class="secondary-button active" data-admin-tab="users" type="button">用户列表</button>
+            <button class="secondary-button" data-admin-tab="ratings" type="button">评分列表</button>
+            <button class="secondary-button" data-admin-tab="comments" type="button">评论列表</button>
+          </div>
+
+          <section class="admin-panel" id="adminUsersPanel">
+            <div class="panel-heading compact-heading">
+              <h3>用户列表</h3>
+              <span class="score-pill" id="adminUserCount">0</span>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="adminUsersTable"></table>
+            </div>
+          </section>
+
+          <section class="admin-panel hidden" id="adminRatingsPanel">
+            <div class="panel-heading compact-heading">
+              <h3>评分列表</h3>
+              <span class="score-pill" id="adminRatingCount">0</span>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="adminRatingsTable"></table>
+            </div>
+          </section>
+
+          <section class="admin-panel hidden" id="adminCommentsPanel">
+            <div class="panel-heading compact-heading">
+              <h3>评论列表</h3>
+              <span class="score-pill" id="adminCommentCount">0</span>
+            </div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="adminCommentsTable"></table>
+            </div>
+          </section>
+
+          <p class="notice" id="adminNotice"></p>
+        </section>
       </section>
     </main>
 
@@ -208,6 +282,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260530-detail-layout"></script>
+    <script src="app.js?v=20260607-markdown-comments"></script>
   </body>
 </html>

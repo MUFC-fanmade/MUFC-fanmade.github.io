@@ -36,11 +36,28 @@ const demoSubmissions = [
   },
 ];
 
+const demoComments = [
+  {
+    id: "demo-comment-1",
+    display_name: "MUFC Demo",
+    body: "这个评论区会在接入 Supabase 后读取真实数据。",
+    user_score: 9.2,
+    created_at: new Date().toISOString(),
+  },
+];
+
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
+
 const state = {
   session: null,
+  profile: null,
   submissions: [],
   ownSubmissions: [],
   ownRatings: [],
+  adminUsers: [],
+  adminRatings: [],
+  adminComments: [],
+  adminTab: "users",
   activeSubmission: null,
   activeChartLevels: [],
   activeChartLevel: null,
@@ -50,6 +67,7 @@ const state = {
 const els = {
   authToggle: document.querySelector("#authToggle"),
   profileNav: document.querySelector("#profileNav"),
+  adminNav: document.querySelector("#adminNav"),
   sessionLabel: document.querySelector("#sessionLabel"),
   loginForm: document.querySelector("#loginForm"),
   registerForm: document.querySelector("#registerForm"),
@@ -59,6 +77,7 @@ const els = {
   submitView: document.querySelector("#submitView"),
   authView: document.querySelector("#authView"),
   profileView: document.querySelector("#profileView"),
+  adminView: document.querySelector("#adminView"),
   detailView: document.querySelector("#detailView"),
   galleryGrid: document.querySelector("#galleryGrid"),
   refreshGallery: document.querySelector("#refreshGallery"),
@@ -66,6 +85,21 @@ const els = {
   submissionForm: document.querySelector("#submissionForm"),
   submitNotice: document.querySelector("#submitNotice"),
   profileNotice: document.querySelector("#profileNotice"),
+  profileForm: document.querySelector("#profileForm"),
+  profileAvatar: document.querySelector("#profileAvatar"),
+  profileDisplayName: document.querySelector("#profileDisplayName"),
+  profileEmail: document.querySelector("#profileEmail"),
+  adminNotice: document.querySelector("#adminNotice"),
+  refreshAdmin: document.querySelector("#refreshAdmin"),
+  adminUsersPanel: document.querySelector("#adminUsersPanel"),
+  adminRatingsPanel: document.querySelector("#adminRatingsPanel"),
+  adminCommentsPanel: document.querySelector("#adminCommentsPanel"),
+  adminUsersTable: document.querySelector("#adminUsersTable"),
+  adminRatingsTable: document.querySelector("#adminRatingsTable"),
+  adminCommentsTable: document.querySelector("#adminCommentsTable"),
+  adminUserCount: document.querySelector("#adminUserCount"),
+  adminRatingCount: document.querySelector("#adminRatingCount"),
+  adminCommentCount: document.querySelector("#adminCommentCount"),
   mySubmissionsList: document.querySelector("#mySubmissionsList"),
   myRatingsList: document.querySelector("#myRatingsList"),
   mySubmissionCount: document.querySelector("#mySubmissionCount"),
@@ -112,11 +146,48 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function renderMarkdown(value) {
+  const source = String(value || "");
+  if (!window.marked || !window.DOMPurify) {
+    return escapeHtml(source).replaceAll("\n", "<br>");
+  }
+
+  try {
+    const html = window.marked.parse(source, { gfm: true, breaks: true });
+    return window.DOMPurify.sanitize(html, {
+      USE_PROFILES: { html: true },
+      ADD_ATTR: ["target", "rel"],
+    });
+  } catch (error) {
+    return escapeHtml(source).replaceAll("\n", "<br>");
+  }
+}
+
+function getInitials(value) {
+  const text = String(value || "").trim();
+  if (!text) return "MU";
+  return text.slice(0, 2).toUpperCase();
+}
+
+function renderAvatar(container, profile, fallbackName) {
+  const name = profile?.display_name || fallbackName || "MUFC";
+  container.innerHTML = "";
+  if (profile?.avatar_url) {
+    const img = document.createElement("img");
+    img.src = profile.avatar_url;
+    img.alt = name;
+    container.append(img);
+    return;
+  }
+  container.textContent = getInitials(name);
+}
+
 function updateSessionUi() {
   const user = state.session?.user;
   els.sessionLabel.textContent = user ? user.email : "未登录";
   els.authToggle.textContent = user ? "退出" : "登录";
   els.profileNav.classList.toggle("hidden", !user);
+  els.adminNav.classList.toggle("hidden", !user || !state.profile?.is_admin);
 }
 
 function setAuthMode(mode) {
@@ -134,16 +205,32 @@ function showView(name) {
     name = "auth";
   }
 
+  if (name === "admin") {
+    if (!state.session) {
+      setNotice(els.authNotice, "请先登录管理员账号。", true);
+      setAuthMode("login");
+      name = "auth";
+    } else if (!state.profile?.is_admin) {
+      setNotice(els.authNotice, "当前账号没有管理员权限。", true);
+      name = "home";
+    }
+  }
+
   els.homeView.classList.toggle("hidden", name !== "home");
   els.submitView.classList.toggle("hidden", name !== "submit");
   els.authView.classList.toggle("hidden", name !== "auth");
   els.profileView.classList.toggle("hidden", name !== "profile");
+  els.adminView.classList.toggle("hidden", name !== "admin");
   els.detailView.classList.toggle("hidden", name !== "detail");
   document.body.classList.toggle("is-detail-view", name === "detail");
   window.location.hash = name;
 
   if (name === "profile") {
     loadProfile();
+  }
+
+  if (name === "admin") {
+    loadAdminData();
   }
 }
 
@@ -203,6 +290,17 @@ function formatDate(value) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(new Date(value));
 }
 
@@ -335,8 +433,37 @@ function createProfileItem({ title, imageUrl, meta, detail, onOpen }) {
   return item;
 }
 
+async function loadCurrentProfile() {
+  if (!client || !state.session) {
+    state.profile = null;
+    updateSessionUi();
+    return null;
+  }
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("id,display_name,avatar_url,is_admin,created_at")
+    .eq("id", state.session.user.id)
+    .single();
+
+  if (error) {
+    state.profile = null;
+    updateSessionUi();
+    return null;
+  }
+
+  state.profile = data;
+  updateSessionUi();
+  return data;
+}
+
 async function loadProfile() {
   if (!client) {
+    state.profile = {
+      display_name: "MUFC Demo",
+      avatar_url: "",
+      is_admin: false,
+    };
     state.ownSubmissions = demoSubmissions.slice(0, 1);
     state.ownRatings = [{ submission_id: "demo-2", score: 8.5, updated_at: new Date().toISOString() }];
     renderProfile();
@@ -349,7 +476,12 @@ async function loadProfile() {
   }
 
   setNotice(els.profileNotice, "加载中...");
-  const [submissionsResult, ratingsResult] = await Promise.all([
+  const [profileResult, submissionsResult, ratingsResult] = await Promise.all([
+    client
+      .from("profiles")
+      .select("id,display_name,avatar_url,is_admin,created_at")
+      .eq("id", state.session.user.id)
+      .single(),
     client
       .from("submissions")
       .select("id,title,description,image_url,maidata_url,track_url,bg_url,pv_url,level,created_at")
@@ -362,6 +494,11 @@ async function loadProfile() {
       .order("updated_at", { ascending: false }),
   ]);
 
+  if (profileResult.error) {
+    setNotice(els.profileNotice, profileResult.error.message, true);
+    return;
+  }
+
   if (submissionsResult.error) {
     setNotice(els.profileNotice, submissionsResult.error.message, true);
     return;
@@ -372,6 +509,7 @@ async function loadProfile() {
     return;
   }
 
+  state.profile = profileResult.data;
   state.ownSubmissions = submissionsResult.data || [];
   state.ownRatings = ratingsResult.data || [];
   await loadSubmissions();
@@ -380,6 +518,15 @@ async function loadProfile() {
 }
 
 function renderProfile() {
+  const fallbackName = state.session?.email || "MUFC";
+  const displayName = state.profile?.display_name || fallbackName;
+
+  renderAvatar(els.profileAvatar, state.profile, displayName);
+  els.profileDisplayName.textContent = displayName;
+  els.profileEmail.textContent = state.session?.email || "演示模式";
+  els.profileForm.elements.displayName.value = state.profile?.display_name || "";
+  els.profileForm.elements.avatar.value = "";
+
   els.mySubmissionCount.textContent = state.ownSubmissions.length;
   els.myRatingCount.textContent = state.ownRatings.length;
 
@@ -412,6 +559,219 @@ function renderProfile() {
       });
     },
   );
+}
+
+function renderAdminTable(table, columns, rows, emptyText) {
+  if (!table) return;
+
+  if (!rows.length) {
+    table.innerHTML = `
+      <tbody>
+        <tr>
+          <td class="admin-empty" colspan="${columns.length}">${escapeHtml(emptyText)}</td>
+        </tr>
+      </tbody>
+    `;
+    return;
+  }
+
+  const head = columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+  const body = rows
+    .map((row) => {
+      const cells = columns
+        .map((column) => {
+          const value = column.render ? column.render(row) : row[column.key];
+          return `<td>${escapeHtml(value ?? "")}</td>`;
+        })
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+
+  table.innerHTML = `
+    <thead><tr>${head}</tr></thead>
+    <tbody>${body}</tbody>
+  `;
+}
+
+function renderAdminData() {
+  els.adminUserCount.textContent = String(state.adminUsers.length);
+  els.adminRatingCount.textContent = String(state.adminRatings.length);
+  els.adminCommentCount.textContent = String(state.adminComments.length);
+
+  renderAdminTable(
+    els.adminUsersTable,
+    [
+      { label: "邮箱", key: "email" },
+      { label: "昵称", key: "display_name" },
+      { label: "管理员", render: (row) => (row.is_admin ? "是" : "否") },
+      { label: "作品", key: "submission_count" },
+      { label: "评分", key: "rating_count" },
+      { label: "评论", key: "comment_count" },
+      { label: "注册时间", render: (row) => formatDateTime(row.created_at) },
+      { label: "最近登录", render: (row) => formatDateTime(row.last_sign_in_at) || "-" },
+    ],
+    state.adminUsers,
+    "没有用户数据。"
+  );
+
+  renderAdminTable(
+    els.adminRatingsTable,
+    [
+      { label: "作品", key: "submission_title" },
+      { label: "邮箱", key: "user_email" },
+      { label: "昵称", key: "display_name" },
+      { label: "分数", render: (row) => Number(row.score || 0).toFixed(1) },
+      { label: "更新时间", render: (row) => formatDateTime(row.updated_at) },
+    ],
+    state.adminRatings,
+    "没有评分数据。"
+  );
+
+  renderAdminTable(
+    els.adminCommentsTable,
+    [
+      { label: "作品", key: "submission_title" },
+      { label: "邮箱", key: "user_email" },
+      { label: "昵称", key: "display_name" },
+      { label: "评论 Markdown", key: "body" },
+      { label: "发表时间", render: (row) => formatDateTime(row.created_at) },
+    ],
+    state.adminComments,
+    "没有评论数据。"
+  );
+}
+
+function setAdminTab(tab) {
+  state.adminTab = tab;
+  document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.adminTab === tab);
+  });
+  els.adminUsersPanel.classList.toggle("hidden", tab !== "users");
+  els.adminRatingsPanel.classList.toggle("hidden", tab !== "ratings");
+  els.adminCommentsPanel.classList.toggle("hidden", tab !== "comments");
+}
+
+async function loadAdminData() {
+  if (!client || !state.session || !state.profile?.is_admin) {
+    setNotice(els.adminNotice, "当前账号没有管理员权限。", true);
+    return;
+  }
+
+  setNotice(els.adminNotice, "加载中...");
+  const [usersResult, ratingsResult, commentsResult] = await Promise.all([
+    client.rpc("admin_user_rows"),
+    client.rpc("admin_rating_rows"),
+    client.rpc("admin_comment_rows"),
+  ]);
+
+  const error = usersResult.error || ratingsResult.error || commentsResult.error;
+  if (error) {
+    setNotice(els.adminNotice, error.message, true);
+    state.adminUsers = [];
+    state.adminRatings = [];
+    state.adminComments = [];
+    renderAdminData();
+    return;
+  }
+
+  state.adminUsers = usersResult.data || [];
+  state.adminRatings = ratingsResult.data || [];
+  state.adminComments = commentsResult.data || [];
+  renderAdminData();
+  setAdminTab(state.adminTab);
+  setNotice(els.adminNotice, "");
+}
+
+function getAvatarExtension(file) {
+  const byName = file.name.split(".").pop()?.toLowerCase();
+  if (["jpg", "jpeg", "png", "webp"].includes(byName)) {
+    return byName === "jpeg" ? "jpg" : byName;
+  }
+
+  const byType = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+  };
+  return byType[file.type] || "";
+}
+
+async function handleProfileUpdate(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+
+  if (!client || !state.session) {
+    setNotice(els.profileNotice, "请先登录再修改个人资料。", true);
+    return;
+  }
+
+  const form = new FormData(formElement);
+  const displayName = form.get("displayName")?.toString().trim();
+  const avatar = form.get("avatar");
+
+  if (!displayName) {
+    setNotice(els.profileNotice, "昵称不能为空。", true);
+    return;
+  }
+
+  if (displayName.length > 40) {
+    setNotice(els.profileNotice, "昵称不能超过 40 个字符。", true);
+    return;
+  }
+
+  let avatarUrl = state.profile?.avatar_url || null;
+  setFormBusy(formElement, true, "保存中...");
+
+  try {
+    if (avatar instanceof File && avatar.size) {
+      if (avatar.size > MAX_AVATAR_SIZE) {
+        setNotice(els.profileNotice, "头像文件不能大于 2MB。", true);
+        return;
+      }
+
+      const extension = getAvatarExtension(avatar);
+      if (!extension) {
+        setNotice(els.profileNotice, "头像仅支持 JPG、PNG 或 WebP。", true);
+        return;
+      }
+
+      const path = `avatars/${state.session.user.id}/avatar.${extension}`;
+      const upload = await client.storage.from("submissions").upload(path, avatar, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+      if (upload.error) {
+        setNotice(els.profileNotice, upload.error.message, true);
+        return;
+      }
+
+      const { data } = client.storage.from("submissions").getPublicUrl(path);
+      avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
+    }
+
+    const { data, error } = await client
+      .from("profiles")
+      .update({
+        display_name: displayName,
+        avatar_url: avatarUrl,
+      })
+      .eq("id", state.session.user.id)
+      .select("id,display_name,avatar_url,is_admin,created_at")
+      .single();
+
+    if (error) {
+      setNotice(els.profileNotice, error.message, true);
+      return;
+    }
+
+    state.profile = data;
+    renderProfile();
+    setNotice(els.profileNotice, "个人资料已保存。");
+  } finally {
+    setFormBusy(formElement, false);
+  }
 }
 
 function buildPlayerUrl(item, maidataLevel) {
@@ -512,11 +872,32 @@ async function openDetail(id) {
         <button class="primary-button" type="submit">提交评分</button>
       </form>
     </div>
+    <section class="comments-panel">
+      <div class="panel-heading compact-heading">
+        <h3>评论区</h3>
+        <span class="score-pill" id="commentCount">0</span>
+      </div>
+      <form class="comment-form" id="commentForm">
+        <textarea name="body" maxlength="1000" rows="4" placeholder="写下你对这个谱面的想法，支持 Markdown" required></textarea>
+        <div class="comment-preview hidden" id="commentPreview" aria-live="polite"></div>
+        <div class="comment-actions">
+          <p class="notice" id="commentNotice">${state.session ? "支持 Markdown：粗体、列表、链接、代码块。" : "登录后可以发表评论。"}</p>
+          <div class="comment-action-buttons">
+            <button class="secondary-button" id="commentPreviewToggle" type="button">预览 Markdown</button>
+            <button class="primary-button" type="submit"${state.session ? "" : " disabled"}>发表评论</button>
+          </div>
+        </div>
+      </form>
+      <div class="comment-list" id="commentList"></div>
+    </section>
   `;
 
   document.querySelector("#ratingForm").addEventListener("submit", submitRating);
+  document.querySelector("#commentForm").addEventListener("submit", submitComment);
+  setupCommentPreview();
   showView("detail");
   window.location.hash = `detail=${encodeURIComponent(item.id)}`;
+  await loadComments();
 
   if (!hasPreviewFiles) return;
 
@@ -545,6 +926,179 @@ async function openDetail(id) {
     els.chartLevelButtons.innerHTML = "";
     els.chartLevelNotice.textContent = `Failed to load chart levels: ${error.message || error}`;
     els.chartLevelNotice.classList.remove("hidden");
+  }
+}
+
+function renderComments(comments) {
+  const list = document.querySelector("#commentList");
+  const count = document.querySelector("#commentCount");
+  if (!list || !count) return;
+
+  count.textContent = String(comments.length);
+  list.innerHTML = "";
+
+  if (!comments.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state compact-empty";
+    empty.textContent = "还没有评论。";
+    list.append(empty);
+    return;
+  }
+
+  comments.forEach((comment) => {
+    const item = document.createElement("article");
+    item.className = "comment-item";
+    const score =
+      comment.user_score !== null && typeof comment.user_score !== "undefined"
+        ? `${Number(comment.user_score).toFixed(1)} / 10`
+        : "未评分";
+
+    item.innerHTML = `
+      <div class="comment-meta">
+        <strong>${escapeHtml(comment.display_name || "匿名用户")}</strong>
+        <span>${escapeHtml(score)}</span>
+        <time>${escapeHtml(formatDateTime(comment.created_at))}</time>
+      </div>
+      <div class="comment-body">${renderMarkdown(comment.body)}</div>
+    `;
+    list.append(item);
+  });
+}
+
+function updateCommentPreview(formElement) {
+  const textarea = formElement.querySelector('textarea[name="body"]');
+  const preview = formElement.querySelector("#commentPreview");
+  if (!textarea || !preview) return;
+
+  const body = textarea.value.trim();
+  if (!body) {
+    preview.innerHTML = '<div class="empty-state compact-empty">没有可预览的内容。</div>';
+    return;
+  }
+
+  preview.innerHTML = `<div class="comment-body">${renderMarkdown(body)}</div>`;
+}
+
+function setupCommentPreview() {
+  const formElement = document.querySelector("#commentForm");
+  const textarea = formElement?.querySelector('textarea[name="body"]');
+  const preview = formElement?.querySelector("#commentPreview");
+  const toggle = formElement?.querySelector("#commentPreviewToggle");
+  if (!formElement || !textarea || !preview || !toggle) return;
+
+  toggle.addEventListener("click", () => {
+    const isPreviewing = !preview.classList.contains("hidden");
+    if (isPreviewing) {
+      preview.classList.add("hidden");
+      textarea.classList.remove("hidden");
+      toggle.textContent = "预览 Markdown";
+      textarea.focus();
+      return;
+    }
+
+    updateCommentPreview(formElement);
+    textarea.classList.add("hidden");
+    preview.classList.remove("hidden");
+    toggle.textContent = "继续编辑";
+  });
+
+  textarea.addEventListener("input", () => {
+    if (!preview.classList.contains("hidden")) {
+      updateCommentPreview(formElement);
+    }
+  });
+}
+
+async function loadComments() {
+  const item = state.activeSubmission;
+  if (!item) return;
+
+  if (!client) {
+    renderComments(demoComments);
+    return;
+  }
+
+  const list = document.querySelector("#commentList");
+  if (list) {
+    list.innerHTML = '<div class="empty-state compact-empty">评论加载中...</div>';
+  }
+
+  const { data, error } = await client
+    .from("submission_comments")
+    .select("id,body,display_name,user_score,created_at,updated_at")
+    .eq("submission_id", item.id)
+    .order("created_at", { ascending: false });
+
+  if (state.activeSubmission?.id !== item.id) return;
+
+  if (error) {
+    const notice = document.querySelector("#commentNotice");
+    if (notice) {
+      notice.textContent = error.message;
+      notice.style.color = "#8f0000";
+    }
+    renderComments([]);
+    return;
+  }
+
+  renderComments(data || []);
+}
+
+async function submitComment(event) {
+  event.preventDefault();
+  const item = state.activeSubmission;
+  const formElement = event.currentTarget;
+  const notice = document.querySelector("#commentNotice");
+  const body = new FormData(formElement).get("body")?.toString().trim();
+
+  if (!body) {
+    if (notice) {
+      notice.textContent = "评论内容不能为空。";
+      notice.style.color = "#8f0000";
+    }
+    return;
+  }
+
+  if (!client) {
+    if (notice) {
+      notice.textContent = "演示模式不会保存评论。";
+      notice.style.color = "";
+    }
+    return;
+  }
+
+  if (!state.session) {
+    if (notice) {
+      notice.textContent = "请先登录再发表评论。";
+      notice.style.color = "#8f0000";
+    }
+    return;
+  }
+
+  setFormBusy(formElement, true, "发表中...");
+  try {
+    const { error } = await client.from("comments").insert({
+      submission_id: item.id,
+      user_id: state.session.user.id,
+      body,
+    });
+
+    if (error) {
+      if (notice) {
+        notice.textContent = error.message;
+        notice.style.color = "#8f0000";
+      }
+      return;
+    }
+
+    formElement.reset();
+    if (notice) {
+      notice.textContent = "评论已发表。";
+      notice.style.color = "";
+    }
+    await loadComments();
+  } finally {
+    setFormBusy(formElement, false);
   }
 }
 
@@ -597,7 +1151,10 @@ async function handleLogin(event) {
     });
 
     setNotice(els.authNotice, error ? error.message : "登录成功。", Boolean(error));
-    if (!error) showView("home");
+    if (!error) {
+      await loadCurrentProfile();
+      showView("home");
+    }
   } finally {
     setFormBusy(formElement, false);
   }
@@ -736,14 +1293,25 @@ async function initSession() {
 
   const { data } = await client.auth.getSession();
   state.session = data.session;
+  if (state.session) {
+    await loadCurrentProfile();
+  }
   updateSessionUi();
 
-  client.auth.onAuthStateChange((_event, session) => {
+  client.auth.onAuthStateChange(async (_event, session) => {
     state.session = session;
+    if (session) {
+      await loadCurrentProfile();
+    }
     updateSessionUi();
     if (!session) {
       state.ownSubmissions = [];
       state.ownRatings = [];
+      state.profile = null;
+      state.adminUsers = [];
+      state.adminRatings = [];
+      state.adminComments = [];
+      updateSessionUi();
     }
   });
 }
@@ -769,8 +1337,13 @@ els.authToggle.addEventListener("click", async () => {
 els.loginForm.addEventListener("submit", handleLogin);
 els.registerForm.addEventListener("submit", handleRegister);
 els.submissionForm.addEventListener("submit", handleSubmission);
+els.profileForm.addEventListener("submit", handleProfileUpdate);
 els.refreshGallery.addEventListener("click", loadSubmissions);
 els.refreshProfile.addEventListener("click", loadProfile);
+els.refreshAdmin.addEventListener("click", loadAdminData);
+document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+  button.addEventListener("click", () => setAdminTab(button.dataset.adminTab));
+});
 
 async function initApp() {
   setAuthMode("login");
@@ -781,7 +1354,7 @@ async function initApp() {
     await openDetail(decodeURIComponent(route.slice("detail=".length)));
     return;
   }
-  showView(["home", "submit", "auth", "profile"].includes(route) ? route : "home");
+  showView(["home", "submit", "auth", "profile", "admin"].includes(route) ? route : "home");
 }
 
 initApp();

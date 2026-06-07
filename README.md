@@ -16,6 +16,9 @@ Current features:
 - Majdata WebGL chart preview on submission detail pages.
 - Multi-difficulty chart level switching parsed from `maidata.txt`.
 - Logged-in user rating flow with one rating per user per submission.
+- Logged-in user Markdown comments on submission detail pages.
+- User profile page with display name editing and avatar upload.
+- Admin-only dashboard for reviewing users, ratings, and comments.
 
 ## Architecture
 
@@ -23,6 +26,9 @@ Use GitHub Pages for the static frontend and Supabase as the backend service:
 
 - Supabase Auth for email/password accounts.
 - Supabase Postgres for profiles, invite codes, submissions, and ratings.
+- Supabase Postgres views for public aggregate scores and public comment display.
+- Client-side Markdown rendering for comments through `marked` and `DOMPurify`.
+- Supabase RPC functions for admin-only dashboard reads.
 - Supabase Storage for uploaded chart package files.
 - Supabase Edge Functions for invite-only registration, so the invite validation and admin user creation happen server-side.
 - Row Level Security policies and explicit grants to keep browser access scoped to the intended public API.
@@ -70,6 +76,7 @@ For GitHub Pages, publish from the repository root. Commit `index.html`, `styles
 6. Submission metadata is saved to `submissions`.
 7. Detail pages load the Majdata WebGL preview and parse available difficulties from `maidata.txt`.
 8. Logged-in users can rate submissions once; scores are aggregated on the homepage.
+9. Logged-in users can post comments; public detail pages read comment display data from a safe view.
 
 ## Changelog
 
@@ -88,3 +95,11 @@ For GitHub Pages, publish from the repository root. Commit `index.html`, `styles
 - Fixed Majdata difficulty mapping from `maidata` levels (`lv_1`-`lv_7`) to Unity levels (`lv0`-`lv6`).
 - Added multi-difficulty buttons that display the chart's actual difficulty value and switch the current player level.
 - Reworked chart detail pages into a full-width subpage layout separate from the homepage venue wall.
+
+### 2026-06-07
+
+- Added a Supabase-backed comment section on chart detail pages.
+- Added `comments` table, RLS policies, update trigger, and public `submission_comments` view.
+- Display comment author name, Markdown-rendered comment text, timestamp, and the author's score for the chart.
+- Store comment Markdown source in Postgres and sanitize rendered HTML in the browser with DOMPurify.
+- Added profile display/editing with avatar upload capped at 2MB.

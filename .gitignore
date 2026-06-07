@@ -23,6 +23,7 @@ secrets.*
 README.local.md
 README.private.md
 NOTES.local.md
+agents.md
 
 # Supabase local state
 supabase/.temp/
