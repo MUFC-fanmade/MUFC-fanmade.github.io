@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MUFC Chart Contest</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23f04d88'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='24' font-family='Arial' font-weight='700' fill='white'%3EMU%3C/text%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" href="styles.css" />
     <script src="config.js?v=20260530-chartpack"></script>
@@ -19,12 +20,16 @@
       </a>
       <nav class="nav-actions">
         <button class="ghost-button" data-route="home">首页</button>
+        <button class="ghost-button" data-route="charts">谱面列表</button>
+        <button class="ghost-button" data-route="guide">使用指南</button>
         <button class="ghost-button" data-route="submit">提交作品</button>
         <button class="ghost-button hidden" id="profileNav" data-route="profile">个人中心</button>
         <button class="ghost-button hidden" id="adminNav" data-route="admin">管理后台</button>
         <button class="primary-button" id="authToggle" data-route="auth">登录</button>
       </nav>
     </header>
+
+    <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
 
     <main>
       <section class="hero">
@@ -46,11 +51,86 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Gallery</p>
-              <h2>参赛作品</h2>
+              <h2>最近谱面</h2>
             </div>
-            <button class="secondary-button" id="refreshGallery" type="button">刷新</button>
+            <div class="section-actions">
+              <button class="secondary-button" id="refreshGallery" type="button">刷新</button>
+              <button class="primary-button" data-route="charts" type="button">查看全部谱面</button>
+            </div>
           </div>
           <div class="gallery-grid" id="galleryGrid"></div>
+        </section>
+
+        <section class="content-view hidden" id="chartsView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Charts</p>
+              <h2>谱面列表</h2>
+            </div>
+            <span class="score-pill" id="allChartCount">0</span>
+          </div>
+
+          <div class="search-panel">
+            <label>
+              检索谱面
+              <input id="chartSearch" type="search" autocomplete="off" placeholder="输入标题、说明或难度关键词" />
+            </label>
+          </div>
+
+          <div class="gallery-grid expanded-grid" id="allChartsGrid"></div>
+        </section>
+
+        <section class="content-view hidden" id="guideView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Guide</p>
+              <h2>使用指南</h2>
+            </div>
+          </div>
+
+          <div class="guide-layout">
+            <section class="guide-panel">
+              <h3>注册与登录</h3>
+              <ol class="guide-steps">
+                <li>向主办方获取邀请码。</li>
+                <li>进入“登录”页面，切换到“邀请码注册”。</li>
+                <li>填写昵称、邮箱、密码和邀请码完成注册。</li>
+                <li>注册成功后回到登录表单，使用邮箱和密码登录。</li>
+              </ol>
+            </section>
+
+            <section class="guide-panel">
+              <h3>提交作品</h3>
+              <ol class="guide-steps">
+                <li>登录后进入“提交作品”。</li>
+                <li>填写标题和作品说明。</li>
+                <li>上传严格命名的文件：maidata.txt、track.mp3、bg.jpg 或 bg.png。</li>
+                <li>如有视频预览，可额外上传 pv.mp4。</li>
+                <li>提交成功后，作品会进入会场和谱面列表。</li>
+              </ol>
+            </section>
+
+            <section class="guide-panel">
+              <h3>浏览、评分与评论</h3>
+              <ol class="guide-steps">
+                <li>首页只展示最近 5 个谱面。</li>
+                <li>进入“谱面列表”可以查看全部作品，并用关键词检索。</li>
+                <li>点击作品封面进入详情页，播放器会加载谱面预览。</li>
+                <li>登录后可以对作品评分，并在评论区使用 Markdown 发表评论。</li>
+                <li>个人中心可以查看自己的作品、评分记录，并修改昵称和头像。</li>
+              </ol>
+            </section>
+
+            <section class="guide-panel">
+              <h3>常见提醒</h3>
+              <ul class="guide-list">
+                <li>邀请码错误或已使用时，页面右上角会浮现错误提醒。</li>
+                <li>未登录时无法提交、评分或发表评论。</li>
+                <li>上传文件名必须完全符合要求，否则提交会被阻止。</li>
+                <li>头像文件不能超过 2MB，仅支持 JPG、PNG 或 WebP。</li>
+              </ul>
+            </section>
+          </div>
         </section>
 
         <section class="content-view hidden" id="submitView">
@@ -227,8 +307,10 @@
 
           <div class="admin-tabs" role="tablist" aria-label="管理后台数据切换">
             <button class="secondary-button active" data-admin-tab="users" type="button">用户列表</button>
+            <button class="secondary-button" data-admin-tab="submissions" type="button">谱面管理</button>
             <button class="secondary-button" data-admin-tab="ratings" type="button">评分列表</button>
             <button class="secondary-button" data-admin-tab="comments" type="button">评论列表</button>
+            <button class="secondary-button" data-admin-tab="invites" type="button">邀请码</button>
           </div>
 
           <section class="admin-panel" id="adminUsersPanel">
@@ -236,8 +318,94 @@
               <h3>用户列表</h3>
               <span class="score-pill" id="adminUserCount">0</span>
             </div>
+            <form id="adminPasswordForm" class="admin-action-form compact-admin-form">
+              <label>
+                账户
+                <select id="adminPasswordUserSelect" name="userId" required></select>
+              </label>
+              <label>
+                新密码
+                <input name="password" type="password" minlength="6" autocomplete="new-password" required />
+              </label>
+              <label>
+                确认新密码
+                <input name="confirmPassword" type="password" minlength="6" autocomplete="new-password" required />
+              </label>
+              <button class="primary-button" type="submit">修改密码</button>
+            </form>
             <div class="admin-table-wrap">
               <table class="admin-table" id="adminUsersTable"></table>
+            </div>
+          </section>
+
+          <section class="admin-panel hidden" id="adminSubmissionsPanel">
+            <div class="panel-heading compact-heading">
+              <h3>谱面管理</h3>
+              <span class="score-pill" id="adminSubmissionCount">0</span>
+            </div>
+
+            <div class="admin-action-grid">
+              <form id="adminSubmissionForm" class="admin-action-form">
+                <h4>后台上传谱面</h4>
+                <label>
+                  提交者
+                  <select id="adminSubmitterSelect" name="submitterId" required></select>
+                </label>
+                <label>
+                  标题
+                  <input name="title" maxlength="80" required />
+                </label>
+                <label>
+                  说明
+                  <textarea name="description" maxlength="500" rows="4"></textarea>
+                </label>
+                <label>
+                  maidata.txt
+                  <input name="maidata" type="file" accept=".txt,text/plain" required />
+                </label>
+                <label>
+                  track.mp3
+                  <input name="track" type="file" accept="audio/mpeg,.mp3" required />
+                </label>
+                <label>
+                  bg.jpg / bg.png
+                  <input name="bg" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required />
+                </label>
+                <label>
+                  pv.mp4（可选）
+                  <input name="pv" type="file" accept="video/mp4,.mp4" />
+                </label>
+                <button class="primary-button" type="submit">后台上传</button>
+              </form>
+
+              <form id="adminFileForm" class="admin-action-form">
+                <h4>替换 / 删除谱面文件</h4>
+                <label>
+                  谱面
+                  <select id="adminFileSubmissionSelect" name="submissionId" required></select>
+                </label>
+                <label>
+                  文件类型
+                  <select name="fileType" required>
+                    <option value="maidata">maidata.txt</option>
+                    <option value="track">track.mp3</option>
+                    <option value="bg">bg.jpg / bg.png</option>
+                    <option value="pv">pv.mp4</option>
+                  </select>
+                </label>
+                <label>
+                  新文件
+                  <input name="file" type="file" />
+                </label>
+                <div class="form-actions">
+                  <button class="primary-button" type="submit">上传 / 替换</button>
+                  <button class="danger-button" data-admin-delete-file type="button">删除文件</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="adminSubmissionsTable"></table>
             </div>
           </section>
 
@@ -258,6 +426,34 @@
             </div>
             <div class="admin-table-wrap">
               <table class="admin-table" id="adminCommentsTable"></table>
+            </div>
+          </section>
+
+          <section class="admin-panel hidden" id="adminInvitesPanel">
+            <div class="panel-heading compact-heading">
+              <h3>邀请码</h3>
+              <span class="score-pill" id="adminInviteCount">0</span>
+            </div>
+
+            <form id="adminInviteForm" class="admin-action-form compact-admin-form">
+              <label>
+                邀请码（留空自动生成）
+                <input name="code" maxlength="64" autocomplete="off" />
+              </label>
+              <label>
+                备注
+                <input name="note" maxlength="120" autocomplete="off" />
+              </label>
+              <label>
+                过期时间（可选）
+                <input name="expiresAt" type="datetime-local" />
+              </label>
+              <button class="primary-button" type="submit">生成邀请码</button>
+              <p class="notice" id="adminGeneratedInvite"></p>
+            </form>
+
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="adminInvitesTable"></table>
             </div>
           </section>
 
@@ -282,6 +478,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260607-markdown-comments"></script>
+    <script src="app.js?v=20260620-admin-identity-password"></script>
   </body>
 </html>

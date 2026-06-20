@@ -55,9 +55,12 @@ const state = {
   ownSubmissions: [],
   ownRatings: [],
   adminUsers: [],
+  adminSubmissions: [],
   adminRatings: [],
   adminComments: [],
+  adminInvites: [],
   adminTab: "users",
+  chartQuery: "",
   activeSubmission: null,
   activeChartLevels: [],
   activeChartLevel: null,
@@ -73,13 +76,19 @@ const els = {
   registerForm: document.querySelector("#registerForm"),
   switchAuth: document.querySelector("#switchAuth"),
   authNotice: document.querySelector("#authNotice"),
+  toastStack: document.querySelector("#toastStack"),
   homeView: document.querySelector("#homeView"),
+  chartsView: document.querySelector("#chartsView"),
+  guideView: document.querySelector("#guideView"),
   submitView: document.querySelector("#submitView"),
   authView: document.querySelector("#authView"),
   profileView: document.querySelector("#profileView"),
   adminView: document.querySelector("#adminView"),
   detailView: document.querySelector("#detailView"),
   galleryGrid: document.querySelector("#galleryGrid"),
+  allChartsGrid: document.querySelector("#allChartsGrid"),
+  chartSearch: document.querySelector("#chartSearch"),
+  allChartCount: document.querySelector("#allChartCount"),
   refreshGallery: document.querySelector("#refreshGallery"),
   refreshProfile: document.querySelector("#refreshProfile"),
   submissionForm: document.querySelector("#submissionForm"),
@@ -92,14 +101,28 @@ const els = {
   adminNotice: document.querySelector("#adminNotice"),
   refreshAdmin: document.querySelector("#refreshAdmin"),
   adminUsersPanel: document.querySelector("#adminUsersPanel"),
+  adminSubmissionsPanel: document.querySelector("#adminSubmissionsPanel"),
   adminRatingsPanel: document.querySelector("#adminRatingsPanel"),
   adminCommentsPanel: document.querySelector("#adminCommentsPanel"),
+  adminInvitesPanel: document.querySelector("#adminInvitesPanel"),
   adminUsersTable: document.querySelector("#adminUsersTable"),
+  adminSubmissionsTable: document.querySelector("#adminSubmissionsTable"),
   adminRatingsTable: document.querySelector("#adminRatingsTable"),
   adminCommentsTable: document.querySelector("#adminCommentsTable"),
+  adminInvitesTable: document.querySelector("#adminInvitesTable"),
+  adminSubmissionForm: document.querySelector("#adminSubmissionForm"),
+  adminSubmitterSelect: document.querySelector("#adminSubmitterSelect"),
+  adminFileForm: document.querySelector("#adminFileForm"),
+  adminFileSubmissionSelect: document.querySelector("#adminFileSubmissionSelect"),
+  adminInviteForm: document.querySelector("#adminInviteForm"),
+  adminGeneratedInvite: document.querySelector("#adminGeneratedInvite"),
+  adminPasswordForm: document.querySelector("#adminPasswordForm"),
+  adminPasswordUserSelect: document.querySelector("#adminPasswordUserSelect"),
   adminUserCount: document.querySelector("#adminUserCount"),
+  adminSubmissionCount: document.querySelector("#adminSubmissionCount"),
   adminRatingCount: document.querySelector("#adminRatingCount"),
   adminCommentCount: document.querySelector("#adminCommentCount"),
+  adminInviteCount: document.querySelector("#adminInviteCount"),
   mySubmissionsList: document.querySelector("#mySubmissionsList"),
   myRatingsList: document.querySelector("#myRatingsList"),
   mySubmissionCount: document.querySelector("#mySubmissionCount"),
@@ -117,9 +140,27 @@ const els = {
   cardTemplate: document.querySelector("#submissionCardTemplate"),
 };
 
+function showToast(message, type = "error") {
+  if (!message || !els.toastStack) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  els.toastStack.append(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add("is-leaving");
+    window.setTimeout(() => toast.remove(), 220);
+  }, 3600);
+}
+
 function setNotice(element, message, isError = false) {
+  if (!element) return;
   element.textContent = message;
-  element.style.color = isError ? "#8f0000" : "";
+  element.style.color = isError ? "#bd235f" : "";
+  if (isError && message) {
+    showToast(message, "error");
+  }
 }
 
 function setFormBusy(form, isBusy, busyText) {
@@ -217,6 +258,8 @@ function showView(name) {
   }
 
   els.homeView.classList.toggle("hidden", name !== "home");
+  els.chartsView.classList.toggle("hidden", name !== "charts");
+  els.guideView.classList.toggle("hidden", name !== "guide");
   els.submitView.classList.toggle("hidden", name !== "submit");
   els.authView.classList.toggle("hidden", name !== "auth");
   els.profileView.classList.toggle("hidden", name !== "profile");
@@ -229,23 +272,27 @@ function showView(name) {
     loadProfile();
   }
 
+  if (name === "charts") {
+    renderAllCharts();
+  }
+
   if (name === "admin") {
     loadAdminData();
   }
 }
 
-function renderGallery() {
-  els.galleryGrid.innerHTML = "";
+function renderSubmissionCards(container, submissions, emptyText) {
+  container.innerHTML = "";
 
-  if (!state.submissions.length) {
+  if (!submissions.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "还没有作品，成为第一个提交谱面的人。";
-    els.galleryGrid.append(empty);
+    empty.textContent = emptyText;
+    container.append(empty);
     return;
   }
 
-  state.submissions.forEach((item) => {
+  submissions.forEach((item) => {
     const node = els.cardTemplate.content.firstElementChild.cloneNode(true);
     const image = node.querySelector("img");
     const imageButton = node.querySelector(".image-button");
@@ -259,14 +306,37 @@ function renderGallery() {
 
     imageButton.addEventListener("click", () => openDetail(item.id));
     rateButton.addEventListener("click", () => openDetail(item.id));
-    els.galleryGrid.append(node);
+    container.append(node);
   });
+}
+
+function renderGallery() {
+  const latest = state.submissions.slice(0, 5);
+  renderSubmissionCards(els.galleryGrid, latest, "还没有作品，成为第一个提交谱面的人。");
+}
+
+function getFilteredSubmissions() {
+  const query = state.chartQuery.trim().toLowerCase();
+  if (!query) return state.submissions;
+
+  return state.submissions.filter((item) => {
+    const text = [item.title, item.description, item.level, formatScore(item)].filter(Boolean).join(" ").toLowerCase();
+    return text.includes(query);
+  });
+}
+
+function renderAllCharts() {
+  if (!els.allChartsGrid) return;
+  const filtered = getFilteredSubmissions();
+  els.allChartCount.textContent = `${filtered.length} / ${state.submissions.length}`;
+  renderSubmissionCards(els.allChartsGrid, filtered, "没有找到匹配的谱面。");
 }
 
 async function loadSubmissions() {
   if (!client) {
     state.submissions = demoSubmissions;
     renderGallery();
+    renderAllCharts();
     return;
   }
 
@@ -282,6 +352,7 @@ async function loadSubmissions() {
 
   state.submissions = data || [];
   renderGallery();
+  renderAllCharts();
 }
 
 function formatDate(value) {
@@ -442,7 +513,7 @@ async function loadCurrentProfile() {
 
   const { data, error } = await client
     .from("profiles")
-    .select("id,display_name,avatar_url,is_admin,created_at")
+    .select("id,user_code,display_name,avatar_url,is_admin,created_at")
     .eq("id", state.session.user.id)
     .single();
 
@@ -479,7 +550,7 @@ async function loadProfile() {
   const [profileResult, submissionsResult, ratingsResult] = await Promise.all([
     client
       .from("profiles")
-      .select("id,display_name,avatar_url,is_admin,created_at")
+      .select("id,user_code,display_name,avatar_url,is_admin,created_at")
       .eq("id", state.session.user.id)
       .single(),
     client
@@ -581,7 +652,7 @@ function renderAdminTable(table, columns, rows, emptyText) {
       const cells = columns
         .map((column) => {
           const value = column.render ? column.render(row) : row[column.key];
-          return `<td>${escapeHtml(value ?? "")}</td>`;
+          return column.html ? `<td>${value ?? ""}</td>` : `<td>${escapeHtml(value ?? "")}</td>`;
         })
         .join("");
       return `<tr>${cells}</tr>`;
@@ -594,16 +665,112 @@ function renderAdminTable(table, columns, rows, emptyText) {
   `;
 }
 
+function formatUserLabel(user) {
+  return [user?.user_code, user?.display_name, user?.email || user?.user_email].filter(Boolean).join(" / ") || "未命名用户";
+}
+
+function storagePathFromPublicUrl(url) {
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    const marker = "/storage/v1/object/public/submissions/";
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return "";
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
+  } catch (_error) {
+    return "";
+  }
+}
+
+function collectSubmissionStoragePaths(submission) {
+  const paths = new Set();
+  [
+    submission.image_path,
+    storagePathFromPublicUrl(submission.image_url),
+    storagePathFromPublicUrl(submission.maidata_url),
+    storagePathFromPublicUrl(submission.track_url),
+    storagePathFromPublicUrl(submission.bg_url),
+    storagePathFromPublicUrl(submission.pv_url),
+  ]
+    .filter(Boolean)
+    .forEach((path) => paths.add(path));
+
+  return [...paths];
+}
+
+function getSubmissionStoragePath(submission, fileType) {
+  if (!submission) return "";
+
+  if (fileType === "bg") {
+    return submission.image_path || storagePathFromPublicUrl(submission.bg_url || submission.image_url);
+  }
+
+  const fieldByType = {
+    maidata: "maidata_url",
+    track: "track_url",
+    pv: "pv_url",
+  };
+  return storagePathFromPublicUrl(submission[fieldByType[fileType]]);
+}
+
+function getAdminFileConfig(fileType, file) {
+  if (fileType === "maidata") {
+    return { key: "maidata_url", expectedNames: ["maidata.txt"], pathName: "maidata.txt" };
+  }
+  if (fileType === "track") {
+    return { key: "track_url", expectedNames: ["track.mp3"], pathName: "track.mp3" };
+  }
+  if (fileType === "pv") {
+    return { key: "pv_url", expectedNames: ["pv.mp4"], pathName: "pv.mp4" };
+  }
+  if (fileType === "bg") {
+    const expectedNames = ["bg.jpg", "bg.png"];
+    return { key: "bg_url", expectedNames, pathName: file?.name || "bg.jpg" };
+  }
+  throw new Error("请选择要管理的文件类型。");
+}
+
+function syncAdminSelects() {
+  if (els.adminSubmitterSelect) {
+    els.adminSubmitterSelect.innerHTML = state.adminUsers
+      .map((user) => {
+        const label = formatUserLabel(user);
+        return `<option value="${escapeHtml(user.id)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+  }
+
+  if (els.adminPasswordUserSelect) {
+    els.adminPasswordUserSelect.innerHTML = state.adminUsers
+      .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(formatUserLabel(user))}</option>`)
+      .join("");
+  }
+
+  if (els.adminFileSubmissionSelect) {
+    els.adminFileSubmissionSelect.innerHTML = state.adminSubmissions
+      .map((submission) => {
+        const label = `${submission.title || "未命名谱面"} / ${formatUserLabel(submission)}`;
+        return `<option value="${escapeHtml(submission.id)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+  }
+}
+
 function renderAdminData() {
   els.adminUserCount.textContent = String(state.adminUsers.length);
+  els.adminSubmissionCount.textContent = String(state.adminSubmissions.length);
   els.adminRatingCount.textContent = String(state.adminRatings.length);
   els.adminCommentCount.textContent = String(state.adminComments.length);
+  els.adminInviteCount.textContent = String(state.adminInvites.length);
+  syncAdminSelects();
 
   renderAdminTable(
     els.adminUsersTable,
     [
+      { label: "内部编号", key: "user_code" },
       { label: "邮箱", key: "email" },
-      { label: "昵称", key: "display_name" },
+      { label: "显示名", key: "display_name" },
       { label: "管理员", render: (row) => (row.is_admin ? "是" : "否") },
       { label: "作品", key: "submission_count" },
       { label: "评分", key: "rating_count" },
@@ -616,13 +783,49 @@ function renderAdminData() {
   );
 
   renderAdminTable(
+    els.adminSubmissionsTable,
+    [
+      { label: "谱面 ID", key: "id" },
+      { label: "提交者编号", key: "user_code" },
+      { label: "提交者", render: (row) => row.display_name || "-" },
+      { label: "标题", key: "title" },
+      { label: "评分", render: (row) => `${Number(row.average_score || 0).toFixed(1)} / 10 (${row.rating_count || 0})` },
+      { label: "文件", render: (row) => {
+        const names = [
+          row.maidata_url ? "maidata" : "",
+          row.track_url ? "track" : "",
+          row.bg_url || row.image_url ? "bg" : "",
+          row.pv_url ? "pv" : "",
+        ].filter(Boolean);
+        return names.length ? names.join(", ") : "无";
+      } },
+      { label: "提交时间", render: (row) => formatDateTime(row.created_at) },
+      {
+        label: "操作",
+        html: true,
+        render: (row) => `<button class="danger-button" data-admin-delete-submission="${escapeHtml(row.id)}" type="button">删除谱面</button>`,
+      },
+    ],
+    state.adminSubmissions,
+    "没有谱面数据。"
+  );
+
+  renderAdminTable(
     els.adminRatingsTable,
     [
+      { label: "评分 ID", key: "id" },
+      { label: "谱面 ID", key: "submission_id" },
+      { label: "评分人编号", key: "user_code" },
       { label: "作品", key: "submission_title" },
       { label: "邮箱", key: "user_email" },
-      { label: "昵称", key: "display_name" },
+      { label: "评分人", key: "display_name" },
       { label: "分数", render: (row) => Number(row.score || 0).toFixed(1) },
       { label: "更新时间", render: (row) => formatDateTime(row.updated_at) },
+      {
+        label: "操作",
+        html: true,
+        render: (row) => `<button class="danger-button" data-admin-delete-rating="${escapeHtml(row.id)}" type="button">取消评分</button>`,
+      },
     ],
     state.adminRatings,
     "没有评分数据。"
@@ -632,13 +835,30 @@ function renderAdminData() {
     els.adminCommentsTable,
     [
       { label: "作品", key: "submission_title" },
+      { label: "评论人编号", key: "user_code" },
       { label: "邮箱", key: "user_email" },
-      { label: "昵称", key: "display_name" },
+      { label: "评论人", key: "display_name" },
       { label: "评论 Markdown", key: "body" },
       { label: "发表时间", render: (row) => formatDateTime(row.created_at) },
     ],
     state.adminComments,
     "没有评论数据。"
+  );
+
+  renderAdminTable(
+    els.adminInvitesTable,
+    [
+      { label: "邀请码", key: "code" },
+      { label: "备注", key: "note" },
+      { label: "使用者编号", render: (row) => row.used_user_code || "-" },
+      { label: "使用者", render: (row) => row.used_display_name || "-" },
+      { label: "使用者邮箱", render: (row) => row.used_email || "-" },
+      { label: "使用时间", render: (row) => formatDateTime(row.used_at) || "-" },
+      { label: "过期时间", render: (row) => formatDateTime(row.expires_at) || "-" },
+      { label: "创建时间", render: (row) => formatDateTime(row.created_at) },
+    ],
+    state.adminInvites,
+    "没有邀请码数据。"
   );
 }
 
@@ -648,8 +868,10 @@ function setAdminTab(tab) {
     button.classList.toggle("active", button.dataset.adminTab === tab);
   });
   els.adminUsersPanel.classList.toggle("hidden", tab !== "users");
+  els.adminSubmissionsPanel.classList.toggle("hidden", tab !== "submissions");
   els.adminRatingsPanel.classList.toggle("hidden", tab !== "ratings");
   els.adminCommentsPanel.classList.toggle("hidden", tab !== "comments");
+  els.adminInvitesPanel.classList.toggle("hidden", tab !== "invites");
 }
 
 async function loadAdminData() {
@@ -659,28 +881,336 @@ async function loadAdminData() {
   }
 
   setNotice(els.adminNotice, "加载中...");
-  const [usersResult, ratingsResult, commentsResult] = await Promise.all([
+  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult] = await Promise.all([
     client.rpc("admin_user_rows"),
+    client.rpc("admin_submission_rows"),
     client.rpc("admin_rating_rows"),
     client.rpc("admin_comment_rows"),
+    client.rpc("admin_invite_rows"),
   ]);
 
-  const error = usersResult.error || ratingsResult.error || commentsResult.error;
+  const error = usersResult.error || submissionsResult.error || ratingsResult.error || commentsResult.error || invitesResult.error;
   if (error) {
     setNotice(els.adminNotice, error.message, true);
     state.adminUsers = [];
+    state.adminSubmissions = [];
     state.adminRatings = [];
     state.adminComments = [];
+    state.adminInvites = [];
     renderAdminData();
     return;
   }
 
   state.adminUsers = usersResult.data || [];
+  state.adminSubmissions = submissionsResult.data || [];
   state.adminRatings = ratingsResult.data || [];
   state.adminComments = commentsResult.data || [];
+  state.adminInvites = invitesResult.data || [];
   renderAdminData();
   setAdminTab(state.adminTab);
   setNotice(els.adminNotice, "");
+}
+
+async function deleteAdminRating(ratingId) {
+  if (!client || !ratingId) return;
+  if (!window.confirm("确定要取消这一条评分吗？")) return;
+
+  setNotice(els.adminNotice, "正在取消评分...");
+  const { error } = await client.rpc("admin_delete_rating", { p_rating_id: ratingId });
+  if (error) {
+    setNotice(els.adminNotice, error.message, true);
+    return;
+  }
+
+  await Promise.all([loadSubmissions(), loadAdminData()]);
+  setNotice(els.adminNotice, "评分已取消。");
+}
+
+async function deleteAdminSubmission(submissionId) {
+  if (!client || !submissionId) return;
+  const submission = state.adminSubmissions.find((item) => item.id === submissionId);
+  if (!submission) return;
+  if (!window.confirm(`确定要删除谱面「${submission.title}」吗？该操作会同时删除评分、评论和已上传文件。`)) return;
+
+  setNotice(els.adminNotice, "正在删除谱面...");
+  const paths = collectSubmissionStoragePaths(submission);
+  const { error } = await client.rpc("admin_delete_submission", { p_submission_id: submissionId });
+  if (error) {
+    setNotice(els.adminNotice, error.message, true);
+    return;
+  }
+
+  if (paths.length) {
+    const removed = await client.storage.from("submissions").remove(paths);
+    if (removed.error) {
+      setNotice(els.adminNotice, removed.error.message, true);
+      return;
+    }
+  }
+
+  await Promise.all([loadSubmissions(), loadAdminData()]);
+  setNotice(els.adminNotice, "谱面已删除。");
+}
+
+async function handleAdminInvite(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const expiresAt = form.get("expiresAt") ? new Date(form.get("expiresAt")).toISOString() : null;
+
+  setFormBusy(formElement, true, "生成中...");
+  setNotice(els.adminNotice, "正在生成邀请码...");
+  try {
+    const { data, error } = await client.rpc("admin_create_invite", {
+      p_code: String(form.get("code") || "").trim() || null,
+      p_note: String(form.get("note") || "").trim() || null,
+      p_expires_at: expiresAt,
+    });
+
+    if (error) {
+      setNotice(els.adminNotice, error.message, true);
+      return;
+    }
+
+    const created = Array.isArray(data) ? data[0] : data;
+    if (els.adminGeneratedInvite) {
+      els.adminGeneratedInvite.textContent = created?.code ? `已生成：${created.code}` : "";
+    }
+    formElement.reset();
+    await loadAdminData();
+    setNotice(els.adminNotice, "邀请码已生成。");
+  } finally {
+    setFormBusy(formElement, false);
+  }
+}
+
+async function handleAdminPasswordUpdate(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const userId = String(form.get("userId") || "");
+  const password = String(form.get("password") || "");
+  const confirmPassword = String(form.get("confirmPassword") || "");
+
+  if (!userId) {
+    setNotice(els.adminNotice, "请选择要修改密码的账户。", true);
+    return;
+  }
+
+  if (password.length < 6) {
+    setNotice(els.adminNotice, "新密码至少需要 6 个字符。", true);
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    setNotice(els.adminNotice, "两次输入的新密码不一致。", true);
+    return;
+  }
+
+  setFormBusy(formElement, true, "修改中...");
+  setNotice(els.adminNotice, "正在修改账户密码...");
+  try {
+    const { data, error } = await client.functions.invoke("admin-update-password", {
+      body: { userId, password },
+    });
+
+    if (error) {
+      let message = error.message;
+      if (error.context) {
+        try {
+          const details = await error.context.json();
+          message = details.error || details.message || message;
+        } catch (_parseError) {
+          message = error.message;
+        }
+      }
+      setNotice(els.adminNotice, message, true);
+      return;
+    }
+
+    formElement.reset();
+    syncAdminSelects();
+    setNotice(els.adminNotice, data?.message || "账户密码已修改。");
+  } catch (error) {
+    setNotice(els.adminNotice, error.message || "修改密码失败。", true);
+  } finally {
+    setFormBusy(formElement, false);
+  }
+}
+
+async function handleAdminSubmission(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  setFormBusy(formElement, true, "上传中...");
+  setNotice(els.adminNotice, "正在后台上传谱面...");
+  try {
+    const form = new FormData(formElement);
+    const submitterId = String(form.get("submitterId") || "");
+    if (!submitterId) throw new Error("请选择提交者。");
+
+    const maidata = getRequiredFile(form, "maidata", ["maidata.txt"]);
+    const track = getRequiredFile(form, "track", ["track.mp3"]);
+    const bg = getRequiredFile(form, "bg", ["bg.jpg", "bg.png"]);
+    const pv = getOptionalFile(form, "pv", ["pv.mp4"]);
+    const defaultLevel = await detectDefaultMajdataLevel(maidata);
+    const submissionId = crypto.randomUUID();
+    const basePath = `${submitterId}/${submissionId}`;
+    const files = [
+      { key: "maidata", file: maidata, path: `${basePath}/maidata.txt` },
+      { key: "track", file: track, path: `${basePath}/track.mp3` },
+      { key: "bg", file: bg, path: `${basePath}/${bg.name}` },
+    ];
+
+    if (pv) {
+      files.push({ key: "pv", file: pv, path: `${basePath}/pv.mp4` });
+    }
+
+    const urls = {};
+    for (const entry of files) {
+      const upload = await client.storage.from("submissions").upload(entry.path, entry.file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+      if (upload.error) throw new Error(upload.error.message);
+
+      const { data } = client.storage.from("submissions").getPublicUrl(entry.path);
+      urls[entry.key] = data.publicUrl;
+    }
+
+    const bgPath = files.find((entry) => entry.key === "bg").path;
+    const insert = await client.from("submissions").insert({
+      id: submissionId,
+      user_id: submitterId,
+      title: form.get("title"),
+      description: form.get("description"),
+      image_path: bgPath,
+      image_url: urls.bg,
+      maidata_url: urls.maidata,
+      track_url: urls.track,
+      bg_url: urls.bg,
+      pv_url: urls.pv || null,
+      level: defaultLevel,
+    });
+
+    if (insert.error) throw new Error(insert.error.message);
+
+    formElement.reset();
+    await Promise.all([loadSubmissions(), loadAdminData()]);
+    setNotice(els.adminNotice, "后台上传完成。");
+  } catch (error) {
+    setNotice(els.adminNotice, error.message || "后台上传失败。", true);
+  } finally {
+    setFormBusy(formElement, false);
+  }
+}
+
+async function replaceAdminSubmissionFile(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const submissionId = String(form.get("submissionId") || "");
+  const fileType = String(form.get("fileType") || "");
+  const submission = state.adminSubmissions.find((item) => item.id === submissionId);
+  if (!submission) {
+    setNotice(els.adminNotice, "请选择谱面。", true);
+    return;
+  }
+
+  const file = form.get("file");
+  if (!(file instanceof File) || !file.size) {
+    setNotice(els.adminNotice, "请选择要上传/替换的文件。", true);
+    return;
+  }
+
+  setFormBusy(formElement, true, "处理中...");
+  setNotice(els.adminNotice, "正在替换文件...");
+  try {
+    const config = getAdminFileConfig(fileType, file);
+    if (!config.expectedNames.includes(file.name)) {
+      throw new Error(`${fileType} 文件名必须严格为 ${config.expectedNames.join(" 或 ")}。`);
+    }
+
+    const oldPath = getSubmissionStoragePath(submission, fileType);
+    const nextPath = `${submission.user_id}/${submission.id}/${config.pathName}`;
+    const upload = await client.storage.from("submissions").upload(nextPath, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (upload.error) throw new Error(upload.error.message);
+
+    if (oldPath && oldPath !== nextPath) {
+      await client.storage.from("submissions").remove([oldPath]);
+    }
+
+    const { data } = client.storage.from("submissions").getPublicUrl(nextPath);
+    const updates = { [config.key]: data.publicUrl };
+    if (fileType === "bg") {
+      updates.image_path = nextPath;
+      updates.image_url = data.publicUrl;
+    }
+    if (fileType === "maidata") {
+      updates.level = await detectDefaultMajdataLevel(file);
+    }
+
+    const updated = await client.from("submissions").update(updates).eq("id", submission.id);
+    if (updated.error) throw new Error(updated.error.message);
+
+    formElement.reset();
+    await Promise.all([loadSubmissions(), loadAdminData()]);
+    setNotice(els.adminNotice, "文件已上传/替换。");
+  } catch (error) {
+    setNotice(els.adminNotice, error.message || "文件替换失败。", true);
+  } finally {
+    setFormBusy(formElement, false);
+  }
+}
+
+async function deleteAdminSubmissionFile() {
+  if (!client || !state.profile?.is_admin || !els.adminFileForm) return;
+
+  const form = new FormData(els.adminFileForm);
+  const submissionId = String(form.get("submissionId") || "");
+  const fileType = String(form.get("fileType") || "");
+  const submission = state.adminSubmissions.find((item) => item.id === submissionId);
+  if (!submission) {
+    setNotice(els.adminNotice, "请选择谱面。", true);
+    return;
+  }
+  if (!window.confirm("确定要删除这个谱面文件吗？")) return;
+
+  const path = getSubmissionStoragePath(submission, fileType);
+  setNotice(els.adminNotice, "正在删除文件...");
+  if (path) {
+    const removed = await client.storage.from("submissions").remove([path]);
+    if (removed.error) {
+      setNotice(els.adminNotice, removed.error.message, true);
+      return;
+    }
+  }
+
+  const config = getAdminFileConfig(fileType);
+  const updates = { [config.key]: null };
+  if (fileType === "bg") {
+    updates.image_path = null;
+    updates.image_url = null;
+  }
+
+  const updated = await client.from("submissions").update(updates).eq("id", submission.id);
+  if (updated.error) {
+    setNotice(els.adminNotice, updated.error.message, true);
+    return;
+  }
+
+  await Promise.all([loadSubmissions(), loadAdminData()]);
+  setNotice(els.adminNotice, "文件已删除。");
 }
 
 function getAvatarExtension(file) {
@@ -758,7 +1288,7 @@ async function handleProfileUpdate(event) {
         avatar_url: avatarUrl,
       })
       .eq("id", state.session.user.id)
-      .select("id,display_name,avatar_url,is_admin,created_at")
+      .select("id,user_code,display_name,avatar_url,is_admin,created_at")
       .single();
 
     if (error) {
@@ -884,7 +1414,7 @@ async function openDetail(id) {
           <p class="notice" id="commentNotice">${state.session ? "支持 Markdown：粗体、列表、链接、代码块。" : "登录后可以发表评论。"}</p>
           <div class="comment-action-buttons">
             <button class="secondary-button" id="commentPreviewToggle" type="button">预览 Markdown</button>
-            <button class="primary-button" type="submit"${state.session ? "" : " disabled"}>发表评论</button>
+            <button class="primary-button" type="submit">发表评论</button>
           </div>
         </div>
       </form>
@@ -1037,6 +1567,7 @@ async function loadComments() {
       notice.textContent = error.message;
       notice.style.color = "#8f0000";
     }
+    showToast(error.message);
     renderComments([]);
     return;
   }
@@ -1056,6 +1587,7 @@ async function submitComment(event) {
       notice.textContent = "评论内容不能为空。";
       notice.style.color = "#8f0000";
     }
+    showToast("评论内容不能为空。");
     return;
   }
 
@@ -1072,6 +1604,7 @@ async function submitComment(event) {
       notice.textContent = "请先登录再发表评论。";
       notice.style.color = "#8f0000";
     }
+    showToast("请先登录再发表评论。");
     return;
   }
 
@@ -1088,6 +1621,7 @@ async function submitComment(event) {
         notice.textContent = error.message;
         notice.style.color = "#8f0000";
       }
+      showToast(error.message);
       return;
     }
 
@@ -1309,8 +1843,10 @@ async function initSession() {
       state.ownRatings = [];
       state.profile = null;
       state.adminUsers = [];
+      state.adminSubmissions = [];
       state.adminRatings = [];
       state.adminComments = [];
+      state.adminInvites = [];
       updateSessionUi();
     }
   });
@@ -1341,8 +1877,27 @@ els.profileForm.addEventListener("submit", handleProfileUpdate);
 els.refreshGallery.addEventListener("click", loadSubmissions);
 els.refreshProfile.addEventListener("click", loadProfile);
 els.refreshAdmin.addEventListener("click", loadAdminData);
+els.chartSearch.addEventListener("input", (event) => {
+  state.chartQuery = event.currentTarget.value;
+  renderAllCharts();
+});
 document.querySelectorAll("[data-admin-tab]").forEach((button) => {
   button.addEventListener("click", () => setAdminTab(button.dataset.adminTab));
+});
+els.adminSubmissionForm?.addEventListener("submit", handleAdminSubmission);
+els.adminFileForm?.addEventListener("submit", replaceAdminSubmissionFile);
+els.adminFileForm
+  ?.querySelector("[data-admin-delete-file]")
+  ?.addEventListener("click", deleteAdminSubmissionFile);
+els.adminInviteForm?.addEventListener("submit", handleAdminInvite);
+els.adminPasswordForm?.addEventListener("submit", handleAdminPasswordUpdate);
+els.adminRatingsTable?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-delete-rating]");
+  if (button) deleteAdminRating(button.dataset.adminDeleteRating);
+});
+els.adminSubmissionsTable?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-delete-submission]");
+  if (button) deleteAdminSubmission(button.dataset.adminDeleteSubmission);
 });
 
 async function initApp() {
@@ -1354,7 +1909,7 @@ async function initApp() {
     await openDetail(decodeURIComponent(route.slice("detail=".length)));
     return;
   }
-  showView(["home", "submit", "auth", "profile", "admin"].includes(route) ? route : "home");
+  showView(["home", "charts", "guide", "submit", "auth", "profile", "admin"].includes(route) ? route : "home");
 }
 
 initApp();

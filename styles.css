@@ -1,16 +1,17 @@
 :root {
   color-scheme: light;
-  --bg: #f6f1e8;
-  --surface: #fffdf8;
+  --bg: #f7fbff;
+  --surface: #ffffff;
   --surface-strong: #ffffff;
-  --ink: #1f1d1b;
-  --muted: #6f665c;
-  --line: #ded4c5;
-  --accent: #e0447f;
-  --accent-dark: #b5265e;
-  --gold: #f3c44f;
-  --cyan: #007f8f;
-  --shadow: 0 18px 50px rgb(46 28 14 / 14%);
+  --ink: #172033;
+  --muted: #657286;
+  --line: #dce8f5;
+  --accent: #f04d88;
+  --accent-dark: #c93068;
+  --gold: #ffd45a;
+  --cyan: #00a6c8;
+  --mint: #32c6a6;
+  --shadow: 0 18px 48px rgb(62 102 150 / 12%);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -22,8 +23,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(135deg, rgb(224 68 127 / 10%), transparent 34%),
-    linear-gradient(315deg, rgb(0 127 143 / 10%), transparent 38%),
+    radial-gradient(circle at 12% 8%, rgb(240 77 136 / 14%), transparent 30%),
+    radial-gradient(circle at 88% 6%, rgb(0 166 200 / 14%), transparent 34%),
+    linear-gradient(180deg, #ffffff, var(--bg) 46%),
     var(--bg);
   color: var(--ink);
 }
@@ -34,7 +36,8 @@ body.is-detail-view {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -51,7 +54,7 @@ button {
   justify-content: space-between;
   gap: 24px;
   padding: 16px clamp(16px, 5vw, 64px);
-  background: rgb(255 253 248 / 88%);
+  background: rgb(255 255 255 / 90%);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(18px);
 }
@@ -71,7 +74,7 @@ button {
   height: 42px;
   place-items: center;
   border-radius: 50%;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
   color: white;
   box-shadow: inset 0 0 0 3px var(--gold);
   font-size: 14px;
@@ -90,7 +93,8 @@ button {
 .primary-button,
 .secondary-button,
 .ghost-button,
-.link-button {
+.link-button,
+.danger-button {
   min-height: 42px;
   border: 0;
   border-radius: 8px;
@@ -108,8 +112,17 @@ button {
 }
 
 .secondary-button {
-  background: var(--ink);
+  background: #21324f;
   color: #fff;
+}
+
+.danger-button {
+  background: #bd235f;
+  color: #fff;
+}
+
+.danger-button:hover {
+  background: #9d174b;
 }
 
 .ghost-button,
@@ -130,7 +143,7 @@ button {
   padding: clamp(40px, 8vw, 88px) clamp(16px, 5vw, 64px);
   color: #fff;
   background:
-    linear-gradient(90deg, rgb(20 14 10 / 84%), rgb(20 14 10 / 36)),
+    linear-gradient(90deg, rgb(23 32 51 / 78%), rgb(23 32 51 / 28)),
     url("https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1800&q=80") center/cover;
 }
 
@@ -206,6 +219,13 @@ body.is-detail-view .content-view {
   margin-bottom: 18px;
 }
 
+.section-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 h2,
 h3,
 p {
@@ -238,7 +258,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -254,6 +275,86 @@ textarea {
 .content-view {
   min-height: 460px;
   padding: 24px;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 86px;
+  right: clamp(16px, 4vw, 34px);
+  z-index: 50;
+  display: grid;
+  width: min(360px, calc(100vw - 32px));
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 13px 15px;
+  border: 1px solid rgb(240 77 136 / 25%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 16px 34px rgb(62 102 150 / 18%);
+  color: var(--ink);
+  font-weight: 800;
+  line-height: 1.45;
+  animation: toast-in 180ms ease-out;
+}
+
+.toast-error {
+  border-left: 4px solid var(--accent);
+}
+
+.toast.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.search-panel,
+.guide-panel {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.search-panel {
+  margin-bottom: 18px;
+}
+
+.expanded-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.guide-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.guide-panel h3 {
+  margin-bottom: 12px;
+}
+
+.guide-steps,
+.guide-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--muted);
+  line-height: 1.65;
 }
 
 .auth-view {
@@ -426,6 +527,44 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-strong);
+}
+
+.admin-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-action-form {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.admin-action-form h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.compact-admin-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
+.compact-admin-form .notice {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .admin-table-wrap {
@@ -872,6 +1011,15 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .admin-action-grid,
+  .compact-admin-form {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-layout {
+    grid-template-columns: 1fr;
+  }
+
   .account-panel {
     grid-template-columns: 1fr;
   }
@@ -891,12 +1039,14 @@ textarea {
 
 @media (max-width: 540px) {
   .nav-actions,
-  .hero-actions {
+  .hero-actions,
+  .section-actions {
     width: 100%;
   }
 
   .nav-actions button,
-  .hero-actions button {
+  .hero-actions button,
+  .section-actions button {
     flex: 1 1 140px;
   }
 
