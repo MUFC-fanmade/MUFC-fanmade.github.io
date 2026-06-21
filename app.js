@@ -121,6 +121,10 @@ const els = {
   allChartsGrid: document.querySelector("#allChartsGrid"),
   chartSearch: document.querySelector("#chartSearch"),
   allChartCount: document.querySelector("#allChartCount"),
+  batchDownloadForm: document.querySelector("#batchDownloadForm"),
+  batchChartNumbers: document.querySelector("#batchChartNumbers"),
+  batchDownloadButton: document.querySelector("#batchDownloadButton"),
+  batchDownloadNotice: document.querySelector("#batchDownloadNotice"),
   recentComments: document.querySelector("#recentComments"),
   popularGrid: document.querySelector("#popularGrid"),
   refreshGallery: document.querySelector("#refreshGallery"),
@@ -2248,6 +2252,113 @@ async function addUrlToZip(zip, fileName, url) {
   zip.file(fileName, await response.blob());
 }
 
+function saveBlobAs(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function parseChartNumberToken(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, "")
+    .replace(/^chart[_-]?/, "");
+
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`无法识别编号：${value}`);
+  }
+
+  const number = Number(normalized);
+  if (!Number.isInteger(number) || number < 1) {
+    throw new Error(`编号必须大于 0：${value}`);
+  }
+  return number;
+}
+
+function parseBatchChartNumbers(value) {
+  const source = String(value || "")
+    .replace(/[，、；;\n]+/g, ",")
+    .trim();
+  const chunks = source
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .flatMap((chunk) => (/\s/.test(chunk) && !/(?:-|~|–|—|到|至)/.test(chunk) ? chunk.split(/\s+/) : [chunk]));
+
+  if (!chunks.length) {
+    throw new Error("请输入要下载的会场编号，例如 1-8, 12, 20。");
+  }
+
+  const numbers = new Set();
+  chunks.forEach((chunk) => {
+    const range = chunk.match(/^(.+?)\s*(?:-|~|–|—|到|至)\s*(.+)$/);
+    if (!range) {
+      numbers.add(parseChartNumberToken(chunk));
+      return;
+    }
+
+    const start = parseChartNumberToken(range[1]);
+    const end = parseChartNumberToken(range[2]);
+    if (end < start) {
+      throw new Error(`编号范围起点不能大于终点：${chunk}`);
+    }
+    if (end - start > 300) {
+      throw new Error(`一次最多选择 301 个编号：${chunk}`);
+    }
+    for (let number = start; number <= end; number += 1) {
+      numbers.add(number);
+    }
+  });
+
+  return [...numbers].sort((a, b) => a - b);
+}
+
+function getChartNumberValue(item) {
+  const number = Number(item?.chart_number || 0);
+  return Number.isInteger(number) && number > 0 ? number : 0;
+}
+
+function getBatchDownloadItems(numbers) {
+  const byNumber = new Map();
+  state.submissions.forEach((item) => {
+    const number = getChartNumberValue(item);
+    if (number && !byNumber.has(number)) {
+      byNumber.set(number, item);
+    }
+  });
+
+  const missing = numbers.filter((number) => !byNumber.has(number));
+  if (missing.length) {
+    throw new Error(`找不到编号：${missing.map((number) => `#${String(number).padStart(3, "0")}`).join(", ")}`);
+  }
+
+  const items = numbers.map((number) => byNumber.get(number));
+  const incomplete = items.filter((item) => !item.maidata_url || !item.track_url || !(item.bg_url || item.image_url));
+  if (incomplete.length) {
+    throw new Error(`以下编号缺少 maidata/track/bg 文件：${incomplete.map(formatChartNumber).join(", ")}`);
+  }
+
+  return items;
+}
+
+function getChartFolderName(item) {
+  return `chart_${String(getChartNumberValue(item)).padStart(3, "0")}`;
+}
+
+async function addSubmissionToBatchZip(zip, item) {
+  const folder = getChartFolderName(item);
+  const bgUrl = item.bg_url || item.image_url;
+  await addUrlToZip(zip, `${folder}/maidata.txt`, item.maidata_url);
+  await addUrlToZip(zip, `${folder}/bg${extensionFromUrl(bgUrl, ".jpg")}`, bgUrl);
+  await addUrlToZip(zip, `${folder}/track.mp3`, item.track_url);
+}
+
 async function downloadSubmissionPackage(item) {
   const button = document.querySelector("#downloadChartButton");
   if (!item || !button) return;
@@ -2268,19 +2379,43 @@ async function downloadSubmissionPackage(item) {
     await addUrlToZip(zip, "pv.mp4", item.pv_url);
 
     const blob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeFileName(item.song_title || item.title)}.zip`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    saveBlobAs(blob, `${safeFileName(item.song_title || item.title)}.zip`);
   } catch (error) {
     showToast(error.message || "下载失败。", "error");
   } finally {
     button.disabled = false;
     button.textContent = defaultText;
+  }
+}
+
+async function handleBatchDownload(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+
+  if (!window.JSZip) {
+    setNotice(els.batchDownloadNotice, "下载组件加载失败，请刷新页面后重试。", true);
+    return;
+  }
+
+  setFormBusy(formElement, true, "打包中...");
+  try {
+    const numbers = parseBatchChartNumbers(els.batchChartNumbers?.value);
+    const items = getBatchDownloadItems(numbers);
+    const zip = new window.JSZip();
+
+    for (const [index, item] of items.entries()) {
+      setNotice(els.batchDownloadNotice, `正在打包 ${index + 1} / ${items.length}：${formatChartNumber(item)}`);
+      await addSubmissionToBatchZip(zip, item);
+    }
+
+    setNotice(els.batchDownloadNotice, "正在生成 Charts.zip...");
+    const blob = await zip.generateAsync({ type: "blob" });
+    saveBlobAs(blob, "Charts.zip");
+    setNotice(els.batchDownloadNotice, `已打包 ${items.length} 个谱面。`);
+  } catch (error) {
+    setNotice(els.batchDownloadNotice, error.message || "批量下载失败。", true);
+  } finally {
+    setFormBusy(formElement, false);
   }
 }
 
@@ -2859,6 +2994,7 @@ els.chartSearch.addEventListener("input", (event) => {
   state.chartPage = 0;
   renderAllCharts();
 });
+els.batchDownloadForm?.addEventListener("submit", handleBatchDownload);
 document.querySelectorAll("[data-admin-tab]").forEach((button) => {
   button.addEventListener("click", () => setAdminTab(button.dataset.adminTab));
 });

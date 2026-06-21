@@ -324,6 +324,7 @@ textarea {
 }
 
 .search-panel,
+.batch-download-panel,
 .guide-panel {
   padding: 18px;
   border: 1px solid var(--line);
@@ -333,6 +334,19 @@ textarea {
 
 .search-panel {
   margin-bottom: 18px;
+}
+
+.batch-download-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin: -6px 0 18px;
+}
+
+.batch-download-panel .notice {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .expanded-grid {
@@ -1714,6 +1728,13 @@ textarea {
     font-size: 26px;
   }
 
+  .batch-download-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-download-panel .primary-button {
+    width: 100%;
+  }
 
   .song-meta-grid {
     grid-template-columns: 1fr;

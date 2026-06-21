@@ -104,6 +104,15 @@
             </label>
           </div>
 
+          <form class="batch-download-panel" id="batchDownloadForm">
+            <label>
+              批量下载编号
+              <input id="batchChartNumbers" name="chartNumbers" autocomplete="off" placeholder="例如 1-8, 12, 20" />
+            </label>
+            <button class="primary-button" id="batchDownloadButton" type="submit">打包下载</button>
+            <p class="notice" id="batchDownloadNotice"></p>
+          </form>
+
           <div class="gallery-grid expanded-grid" id="allChartsGrid"></div>
         </section>
 
