@@ -133,8 +133,8 @@
               <ol class="guide-steps">
                 <li>向主办方获取邀请码。</li>
                 <li>进入“登录”页面，切换到“邀请码注册”。</li>
-                <li>填写昵称、邮箱、密码和邀请码完成注册。</li>
-                <li>注册成功后回到登录表单，使用邮箱和密码登录。</li>
+                <li>填写昵称、QQ 号、密码和邀请码完成注册。</li>
+                <li>注册成功后回到登录表单，使用 QQ 号和密码登录。</li>
               </ol>
             </section>
 
@@ -222,8 +222,8 @@
             <form id="loginForm" class="stack auth-card">
               <h3>登录</h3>
               <label>
-                邮箱
-                <input name="email" type="email" autocomplete="email" required />
+                QQ 号
+                <input name="qqNumber" type="text" inputmode="numeric" autocomplete="username" pattern="[1-9][0-9]{4,11}" required />
               </label>
               <label>
                 密码
@@ -239,8 +239,8 @@
                 <input name="displayName" autocomplete="nickname" required />
               </label>
               <label>
-                邮箱
-                <input name="email" type="email" autocomplete="email" required />
+                QQ 号
+                <input name="qqNumber" type="text" inputmode="numeric" autocomplete="username" pattern="[1-9][0-9]{4,11}" required />
               </label>
               <label>
                 密码
@@ -599,6 +599,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260621-inbox-badge"></script>
+    <script src="app.js?v=20260621-qq-auth"></script>
   </body>
 </html>

@@ -13,6 +13,14 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function normalizeQqNumber(value: unknown) {
+  const qqNumber = String(value || "").trim();
+  if (!/^[1-9][0-9]{4,11}$/.test(qqNumber)) {
+    throw new Error("A valid QQ number is required");
+  }
+  return qqNumber;
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -32,10 +40,17 @@ Deno.serve(async (request) => {
     return json({ error: "Missing Supabase environment variables" }, 500);
   }
 
-  const { email, password, displayName, inviteCode } = await request.json();
+  const { qqNumber, password, displayName, inviteCode } = await request.json();
 
-  if (!email || !password || !displayName || !inviteCode) {
-    return json({ error: "Email, password, displayName, and inviteCode are required" }, 400);
+  if (!qqNumber || !password || !displayName || !inviteCode) {
+    return json({ error: "QQ number, password, displayName, and inviteCode are required" }, 400);
+  }
+
+  let phone = "";
+  try {
+    phone = normalizeQqNumber(qqNumber);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "A valid QQ number is required" }, 400);
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -43,10 +58,10 @@ Deno.serve(async (request) => {
   });
 
   const created = await admin.auth.admin.createUser({
-    email,
+    phone,
     password,
-    email_confirm: true,
-    user_metadata: { display_name: displayName },
+    phone_confirm: true,
+    user_metadata: { display_name: displayName, qq_number: phone },
   });
 
   if (created.error || !created.data.user) {
