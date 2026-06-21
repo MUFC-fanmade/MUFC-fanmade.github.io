@@ -87,6 +87,10 @@ create table if not exists public.submissions (
   bg_url text,
   pv_url text,
   level text not null default 'lv_5',
+  level_value text,
+  song_title text,
+  song_artist text,
+  charter_name text,
   created_at timestamptz not null default now()
 );
 
@@ -98,7 +102,11 @@ add column if not exists maidata_url text,
 add column if not exists track_url text,
 add column if not exists bg_url text,
 add column if not exists pv_url text,
-add column if not exists level text not null default 'lv_5';
+add column if not exists level text not null default 'lv_5',
+add column if not exists level_value text,
+add column if not exists song_title text,
+add column if not exists song_artist text,
+add column if not exists charter_name text;
 
 alter table public.submissions
 alter column level set default 'lv_5';
@@ -121,9 +129,23 @@ create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   submission_id uuid not null references public.submissions(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
+  parent_id uuid references public.comments(id) on delete cascade,
   body text not null check (char_length(body) between 1 and 1000),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+alter table public.comments
+add column if not exists parent_id uuid references public.comments(id) on delete cascade;
+
+create table if not exists public.submission_votes (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references public.submissions(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  value smallint not null check (value in (-1, 1)),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (submission_id, user_id)
 );
 
 create or replace function public.touch_updated_at()
@@ -151,6 +173,66 @@ as $$
   );
 $$;
 
+create or replace function public.enforce_one_regular_submission()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1
+    from public.profiles
+    where id = new.user_id
+      and is_admin = true
+  ) then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(new.user_id::text, 0));
+
+  if exists (
+    select 1
+    from public.submissions
+    where user_id = new.user_id
+      and id <> new.id
+  ) then
+    raise exception '普通用户只能提交一张谱面。' using errcode = '23505';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.validate_comment_parent()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.parent_id is null then
+    return new;
+  end if;
+
+  if not exists (
+    select 1
+    from public.comments parent
+    where parent.id = new.parent_id
+      and parent.submission_id = new.submission_id
+  ) then
+    raise exception '回复的评论不属于当前谱面。' using errcode = '23503';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists submissions_enforce_one_regular_submission on public.submissions;
+create trigger submissions_enforce_one_regular_submission
+before insert or update of user_id on public.submissions
+for each row execute function public.enforce_one_regular_submission();
+
 drop trigger if exists ratings_touch_updated_at on public.ratings;
 create trigger ratings_touch_updated_at
 before update on public.ratings
@@ -161,14 +243,39 @@ create trigger comments_touch_updated_at
 before update on public.comments
 for each row execute function public.touch_updated_at();
 
+drop trigger if exists comments_validate_parent on public.comments;
+create trigger comments_validate_parent
+before insert or update of parent_id, submission_id on public.comments
+for each row execute function public.validate_comment_parent();
+
+drop trigger if exists submission_votes_touch_updated_at on public.submission_votes;
+create trigger submission_votes_touch_updated_at
+before update on public.submission_votes
+for each row execute function public.touch_updated_at();
+
 drop view if exists public.submission_scores;
 drop view if exists public.submission_comments;
 
 create view public.submission_scores
 as
+with rating_counts as (
+  select
+    submission_id,
+    count(id)::int as rating_count
+  from public.ratings
+  group by submission_id
+),
+vote_counts as (
+  select
+    submission_id,
+    count(*) filter (where value = 1)::int as like_count,
+    count(*) filter (where value = -1)::int as dislike_count
+  from public.submission_votes
+  group by submission_id
+)
 select
   s.id,
-  s.title,
+  coalesce(nullif(s.song_title, ''), s.title) as title,
   s.description,
   s.image_url,
   s.maidata_url,
@@ -176,25 +283,36 @@ select
   s.bg_url,
   s.pv_url,
   s.level,
+  s.level_value,
+  s.song_title,
+  s.song_artist,
+  s.charter_name,
   s.created_at,
-  coalesce(round(avg(r.score)::numeric, 1), 0) as average_score,
-  count(r.id)::int as rating_count
+  coalesce(rc.rating_count, 0) as rating_count,
+  coalesce(vc.like_count, 0) as like_count,
+  coalesce(vc.dislike_count, 0) as dislike_count
 from public.submissions s
-left join public.ratings r on r.submission_id = s.id
-group by s.id;
+left join rating_counts rc on rc.submission_id = s.id
+left join vote_counts vc on vc.submission_id = s.id;
 
 create view public.submission_comments
 as
 select
   c.id,
   c.submission_id,
+  c.parent_id,
+  c.parent_id as parents_id,
   c.body,
   c.created_at,
   c.updated_at,
   p.display_name,
+  p.avatar_url,
+  parent_profile.display_name as parent_display_name,
   r.score as user_score
 from public.comments c
 join public.profiles p on p.id = c.user_id
+left join public.comments parent_comment on parent_comment.id = c.parent_id
+left join public.profiles parent_profile on parent_profile.id = parent_comment.user_id
 left join public.ratings r
   on r.submission_id = c.submission_id
  and r.user_id = c.user_id;
@@ -566,17 +684,21 @@ alter table public.invite_codes enable row level security;
 alter table public.submissions enable row level security;
 alter table public.ratings enable row level security;
 alter table public.comments enable row level security;
+alter table public.submission_votes enable row level security;
 
 revoke all on public.profiles from anon, authenticated;
 revoke all on public.invite_codes from anon, authenticated;
 revoke all on public.submissions from anon, authenticated;
 revoke all on public.ratings from anon, authenticated;
 revoke all on public.comments from anon, authenticated;
+revoke all on public.submission_votes from anon, authenticated;
 revoke all on public.submission_scores from anon, authenticated;
 revoke all on public.submission_comments from anon, authenticated;
 revoke execute on function public.claim_invite(text, uuid, text) from public, anon, authenticated;
 revoke execute on function public.current_user_is_admin() from public, anon, authenticated;
 revoke execute on function public.next_profile_user_code() from public, anon, authenticated;
+revoke execute on function public.enforce_one_regular_submission() from public, anon, authenticated;
+revoke execute on function public.validate_comment_parent() from public, anon, authenticated;
 revoke execute on function public.admin_user_rows() from public, anon, authenticated;
 revoke execute on function public.admin_submission_rows() from public, anon, authenticated;
 revoke execute on function public.admin_rating_rows() from public, anon, authenticated;
@@ -593,6 +715,7 @@ grant update (display_name, avatar_url) on public.profiles to authenticated;
 grant select, insert, update, delete on public.submissions to authenticated;
 grant select, insert, update on public.ratings to authenticated;
 grant insert, update, delete on public.comments to authenticated;
+grant select, insert, update, delete on public.submission_votes to authenticated;
 grant execute on function public.claim_invite(text, uuid, text) to service_role;
 grant execute on function public.current_user_is_admin() to authenticated;
 grant execute on function public.admin_user_rows() to authenticated;
@@ -671,6 +794,31 @@ create policy "admins delete ratings"
 on public.ratings for delete
 to authenticated
 using (public.current_user_is_admin());
+
+drop policy if exists "users read own submission vote" on public.submission_votes;
+create policy "users read own submission vote"
+on public.submission_votes for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "users vote as self" on public.submission_votes;
+create policy "users vote as self"
+on public.submission_votes for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "users update own submission vote" on public.submission_votes;
+create policy "users update own submission vote"
+on public.submission_votes for update
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "users delete own submission vote" on public.submission_votes;
+create policy "users delete own submission vote"
+on public.submission_votes for delete
+to authenticated
+using ((select auth.uid()) = user_id);
 
 drop policy if exists "users comment as self" on public.comments;
 create policy "users comment as self"

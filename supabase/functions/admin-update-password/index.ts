@@ -23,13 +23,20 @@ Deno.serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey =
+    Deno.env.get("SUPABASE_ANON_KEY") ||
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
   const serviceRoleKey =
     Deno.env.get("MUFC_SUPABASE_SECRET_KEY") ||
     Deno.env.get("SUPABASE_SECRET_KEY") ||
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return json({ error: "Missing Supabase environment variables" }, 500);
+  }
+
+  if (serviceRoleKey === anonKey) {
+    return json({ error: "Server service role key is not configured" }, 500);
   }
 
   const authHeader = request.headers.get("Authorization") || "";
@@ -42,18 +49,31 @@ Deno.serve(async (request) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const requester = await admin.auth.getUser(token);
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const requester = await userClient.auth.getUser(token);
   if (requester.error || !requester.data.user) {
     return json({ error: "Invalid session" }, 401);
   }
 
-  const profile = await admin
+  const profile = await userClient
     .from("profiles")
-    .select("is_admin")
+    .select("id,is_admin")
     .eq("id", requester.data.user.id)
     .single();
 
-  if (profile.error || !profile.data?.is_admin) {
+  if (profile.error) {
+    return json({ error: `Admin profile check failed: ${profile.error.message}` }, 403);
+  }
+
+  if (!profile.data?.is_admin) {
     return json({ error: "Admin access required" }, 403);
   }
 

@@ -13,26 +13,44 @@ const demoSubmissions = [
   {
     id: "demo-1",
     title: "宴星回廊 Master",
+    song_title: "宴星回廊 Master",
+    song_artist: "MUFC Demo",
+    charter_name: "Demo Charter",
     description: "面向 13+ 难度的节奏型谱面展示图，重点表现交互段落与星形押法。",
     image_url: "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=900&q=80",
-    average_score: 9.2,
+    level: "lv_5",
+    level_value: "13+",
     rating_count: 18,
+    like_count: 12,
+    dislike_count: 1,
   },
   {
     id: "demo-2",
     title: "Campus Signal Re:Mix",
+    song_title: "Campus Signal Re:Mix",
+    song_artist: "Campus Band",
+    charter_name: "Signal Team",
     description: "高校主题原创曲的谱面概念图，强调副歌段落的滑键动线。",
     image_url: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=900&q=80",
-    average_score: 8.6,
+    level: "lv_5",
+    level_value: "14",
     rating_count: 11,
+    like_count: 8,
+    dislike_count: 2,
   },
   {
     id: "demo-3",
     title: "After Class DX",
+    song_title: "After Class DX",
+    song_artist: "After Class",
+    charter_name: "DX Maker",
     description: "毕业生组参赛作品，截图展示了高潮段落的节奏密度设计。",
     image_url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=900&q=80",
-    average_score: 8.9,
+    level: "lv_5",
+    level_value: "13",
     rating_count: 14,
+    like_count: 9,
+    dislike_count: 0,
   },
 ];
 
@@ -40,8 +58,11 @@ const demoComments = [
   {
     id: "demo-comment-1",
     display_name: "MUFC Demo",
+    avatar_url: "",
     body: "这个评论区会在接入 Supabase 后读取真实数据。",
     user_score: 9.2,
+    parent_id: null,
+    parent_display_name: null,
     created_at: new Date().toISOString(),
   },
 ];
@@ -62,6 +83,8 @@ const state = {
   adminTab: "users",
   chartQuery: "",
   activeSubmission: null,
+  activeVoteValue: 0,
+  activeCommentReply: null,
   activeChartLevels: [],
   activeChartLevel: null,
   authMode: "login",
@@ -130,6 +153,7 @@ const els = {
   previewShell: document.querySelector("#previewShell"),
   majdataFrame: document.querySelector("#majdataFrame"),
   chartArtwork: document.querySelector("#chartArtwork"),
+  songInfoBody: document.querySelector("#songInfoBody"),
   chartLevelPanel: document.querySelector("#chartLevelPanel"),
   chartLevelFallback: document.querySelector("#chartLevelFallback"),
   chartLevelFallbackText: document.querySelector("#chartLevelFallbackText"),
@@ -174,8 +198,12 @@ function setFormBusy(form, isBusy, busyText) {
 }
 
 function formatScore(item) {
-  if (!item.rating_count) return "暂无评分";
-  return `${Number(item.average_score || 0).toFixed(1)} / 10 (${item.rating_count})`;
+  const count = Number(item?.rating_count || 0);
+  return count ? `已评分 ${count} 人` : "暂无评分";
+}
+
+function formatReactionCount(label, value) {
+  return `${label} ${Number(value || 0)}`;
 }
 
 function escapeHtml(value) {
@@ -300,9 +328,13 @@ function renderSubmissionCards(container, submissions, emptyText) {
 
     image.src = item.image_url;
     image.alt = item.title;
-    node.querySelector("h3").textContent = item.title;
-    node.querySelector("p").textContent = item.description || "未填写说明";
+    node.querySelector("h3").textContent = item.song_title || item.title;
+    node.querySelector("p").textContent = [item.song_artist ? `曲师 ${item.song_artist}` : "", item.charter_name ? `谱师 ${item.charter_name}` : ""]
+      .filter(Boolean)
+      .join(" / ") || item.description || "未填写说明";
     node.querySelector(".score-pill").textContent = formatScore(item);
+    node.querySelector("[data-like-count]").textContent = formatReactionCount("赞", item.like_count);
+    node.querySelector("[data-dislike-count]").textContent = formatReactionCount("踩", item.dislike_count);
 
     imageButton.addEventListener("click", () => openDetail(item.id));
     rateButton.addEventListener("click", () => openDetail(item.id));
@@ -320,7 +352,21 @@ function getFilteredSubmissions() {
   if (!query) return state.submissions;
 
   return state.submissions.filter((item) => {
-    const text = [item.title, item.description, item.level, formatScore(item)].filter(Boolean).join(" ").toLowerCase();
+    const text = [
+      item.title,
+      item.song_title,
+      item.song_artist,
+      item.charter_name,
+      item.description,
+      item.level,
+      item.level_value,
+      formatScore(item),
+      formatReactionCount("赞", item.like_count),
+      formatReactionCount("踩", item.dislike_count),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
     return text.includes(query);
   });
 }
@@ -395,8 +441,12 @@ function getOptionalFile(form, fieldName, expectedNames) {
   return file;
 }
 
-async function detectDefaultMajdataLevel(maidataFile) {
-  const text = await maidataFile.text();
+function getMaidataField(text, fieldName) {
+  const match = String(text || "").match(new RegExp(`^&${fieldName}=(.*)$`, "m"));
+  return match ? match[1].trim() : "";
+}
+
+function getDefaultMajdataLevelFromText(text) {
   const inoteMatches = [...text.matchAll(/^&inote_(\d+)=/gm)].map((match) => Number(match[1]));
   const levelMatches = [...text.matchAll(/^&lv_(\d+)=/gm)].map((match) => Number(match[1]));
   const available = new Set([...inoteMatches, ...levelMatches]);
@@ -406,6 +456,29 @@ async function detectDefaultMajdataLevel(maidataFile) {
 
   const highestLevel = Math.max(...available);
   return `lv_${highestLevel}`;
+}
+
+function parseMaidataMetadata(text) {
+  const normalized = String(text || "").replace(/^\uFEFF/, "");
+  const levels = parseMajdataLevels(normalized);
+  const defaultLevel = getDefaultMajdataLevelFromText(normalized);
+  const defaultLevelInfo = levels.find((level) => level.maidataLevel === defaultLevel) || levels[levels.length - 1] || null;
+
+  return {
+    songTitle: getMaidataField(normalized, "title"),
+    songArtist: getMaidataField(normalized, "artist"),
+    charterName: getMaidataField(normalized, "des"),
+    defaultLevel,
+    levelValue: defaultLevelInfo?.value || "",
+  };
+}
+
+async function parseMaidataFile(maidataFile) {
+  return parseMaidataMetadata(await maidataFile.text());
+}
+
+async function detectDefaultMajdataLevel(maidataFile) {
+  return (await parseMaidataFile(maidataFile)).defaultLevel;
 }
 
 function getUnityLevel(maidataLevel) {
@@ -427,6 +500,11 @@ function getLevelName(index) {
     7: "UTAGE",
   };
   return names[index] || `LV ${index}`;
+}
+
+function getMaidataLevelName(maidataLevel) {
+  const match = String(maidataLevel || "").match(/^lv_(\d+)$/i);
+  return match ? getLevelName(Number(match[1])) : String(maidataLevel || "LV");
 }
 
 function parseMajdataLevels(text) {
@@ -1014,7 +1092,17 @@ async function handleAdminPasswordUpdate(event) {
   setFormBusy(formElement, true, "修改中...");
   setNotice(els.adminNotice, "正在修改账户密码...");
   try {
+    const { data: sessionData } = await client.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+      setNotice(els.adminNotice, "登录状态已失效，请重新登录后再修改密码。", true);
+      return;
+    }
+
     const { data, error } = await client.functions.invoke("admin-update-password", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: { userId, password },
     });
 
@@ -1058,7 +1146,9 @@ async function handleAdminSubmission(event) {
     const track = getRequiredFile(form, "track", ["track.mp3"]);
     const bg = getRequiredFile(form, "bg", ["bg.jpg", "bg.png"]);
     const pv = getOptionalFile(form, "pv", ["pv.mp4"]);
-    const defaultLevel = await detectDefaultMajdataLevel(maidata);
+    const metadata = await parseMaidataFile(maidata);
+    const fullTitle = metadata.songTitle || String(form.get("title") || "").trim() || "未命名谱面";
+    const title = legacyTitleValue(fullTitle);
     const submissionId = crypto.randomUUID();
     const basePath = `${submitterId}/${submissionId}`;
     const files = [
@@ -1087,7 +1177,7 @@ async function handleAdminSubmission(event) {
     const insert = await client.from("submissions").insert({
       id: submissionId,
       user_id: submitterId,
-      title: form.get("title"),
+      title,
       description: form.get("description"),
       image_path: bgPath,
       image_url: urls.bg,
@@ -1095,7 +1185,11 @@ async function handleAdminSubmission(event) {
       track_url: urls.track,
       bg_url: urls.bg,
       pv_url: urls.pv || null,
-      level: defaultLevel,
+      level: metadata.defaultLevel,
+      level_value: metadata.levelValue || null,
+      song_title: metadata.songTitle || fullTitle,
+      song_artist: metadata.songArtist || null,
+      charter_name: metadata.charterName || null,
     });
 
     if (insert.error) throw new Error(insert.error.message);
@@ -1157,7 +1251,15 @@ async function replaceAdminSubmissionFile(event) {
       updates.image_url = data.publicUrl;
     }
     if (fileType === "maidata") {
-      updates.level = await detectDefaultMajdataLevel(file);
+      const metadata = await parseMaidataFile(file);
+      updates.level = metadata.defaultLevel;
+      updates.level_value = metadata.levelValue || null;
+      updates.song_title = metadata.songTitle || null;
+      updates.song_artist = metadata.songArtist || null;
+      updates.charter_name = metadata.charterName || null;
+      if (metadata.songTitle) {
+        updates.title = legacyTitleValue(metadata.songTitle);
+      }
     }
 
     const updated = await client.from("submissions").update(updates).eq("id", submission.id);
@@ -1373,6 +1475,8 @@ async function openDetail(id) {
   if (!item) return;
 
   state.activeSubmission = item;
+  state.activeVoteValue = 0;
+  state.activeCommentReply = null;
   state.activeChartLevels = [];
   state.activeChartLevel = item.level || "lv_5";
   const hasPreviewFiles = item.maidata_url && item.track_url && (item.bg_url || item.image_url);
@@ -1385,14 +1489,27 @@ async function openDetail(id) {
   els.chartLevelNotice.classList.toggle("hidden", !hasPreviewFiles);
   els.majdataFrame.src = hasPreviewFiles ? buildPlayerUrl(item, state.activeChartLevel) : "";
   els.chartArtwork.innerHTML = `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" />`;
+  if (els.songInfoBody) {
+    els.songInfoBody.innerHTML = `
+      <p class="eyebrow">${formatScore(item)}</p>
+      <h2>${escapeHtml(item.song_title || item.title)}</h2>
+      <div class="song-meta-grid">
+        <span>曲师</span>
+        <strong>${escapeHtml(item.song_artist || "未填写")}</strong>
+        <span>谱师</span>
+        <strong>${escapeHtml(item.charter_name || "未填写")}</strong>
+        <span>默认难度</span>
+        <strong>${escapeHtml([item.level_value, getMaidataLevelName(item.level)].filter(Boolean).join(" "))}</strong>
+        <span>互动</span>
+        <strong>${escapeHtml(formatReactionCount("赞", item.like_count))} / ${escapeHtml(formatReactionCount("踩", item.dislike_count))}</strong>
+      </div>
+      <p class="song-description">${escapeHtml(item.description || "未填写谱面简介。")}</p>
+      <button class="secondary-button download-button" id="downloadChartButton" type="button">下载谱面</button>
+    `;
+  }
 
   els.detailContent.innerHTML = `
-    <section class="detail-info">
-      <p class="eyebrow">Score ${formatScore(item)}</p>
-      <h2>${escapeHtml(item.title)}</h2>
-      <p>${escapeHtml(item.description || "未填写说明")}</p>
-    </section>
-    <div class="rating-box">
+    <div class="rating-box function-card score-card">
       <div>
         <strong>给这个作品评分</strong>
         <p class="notice">登录后可提交 1-10 分，重复评分会覆盖旧分数。</p>
@@ -1402,12 +1519,28 @@ async function openDetail(id) {
         <button class="primary-button" type="submit">提交评分</button>
       </form>
     </div>
-    <section class="comments-panel">
+    <div class="rating-box function-card reaction-box reaction-card">
+      <div>
+        <strong>谱面反馈</strong>
+        <p class="notice" id="reactionNotice">${state.session ? "登录用户可以为这个谱面点赞或点踩。" : "登录后可以点赞或点踩。"}</p>
+      </div>
+      <div class="reaction-controls">
+        <span class="reaction-pill" id="detailLikeCount">${formatReactionCount("赞", item.like_count)}</span>
+        <span class="reaction-pill" id="detailDislikeCount">${formatReactionCount("踩", item.dislike_count)}</span>
+        <button class="secondary-button reaction-button" data-vote-value="1" type="button">点赞</button>
+        <button class="secondary-button reaction-button" data-vote-value="-1" type="button">点踩</button>
+      </div>
+    </div>
+    <section class="comments-panel function-card comment-card">
       <div class="panel-heading compact-heading">
         <h3>评论区</h3>
         <span class="score-pill" id="commentCount">0</span>
       </div>
       <form class="comment-form" id="commentForm">
+        <div class="reply-context hidden" id="replyContext">
+          <span></span>
+          <button class="link-button" id="cancelReplyButton" type="button">取消回复</button>
+        </div>
         <textarea name="body" maxlength="1000" rows="4" placeholder="写下你对这个谱面的想法，支持 Markdown" required></textarea>
         <div class="comment-preview hidden" id="commentPreview" aria-live="polite"></div>
         <div class="comment-actions">
@@ -1424,9 +1557,17 @@ async function openDetail(id) {
 
   document.querySelector("#ratingForm").addEventListener("submit", submitRating);
   document.querySelector("#commentForm").addEventListener("submit", submitComment);
+  document.querySelectorAll("[data-vote-value]").forEach((button) => {
+    button.addEventListener("click", () => submitSubmissionVote(Number(button.dataset.voteValue)));
+  });
+  document.querySelector("#downloadChartButton")?.addEventListener("click", () => downloadSubmissionPackage(item));
+  document.querySelector("#cancelReplyButton")?.addEventListener("click", clearReplyTarget);
   setupCommentPreview();
+  updateReactionUi(item, 0);
+  updateReplyContext();
   showView("detail");
   window.location.hash = `detail=${encodeURIComponent(item.id)}`;
+  await loadCurrentVote();
   await loadComments();
 
   if (!hasPreviewFiles) return;
@@ -1459,6 +1600,211 @@ async function openDetail(id) {
   }
 }
 
+function updateReactionUi(item = state.activeSubmission, voteValue = state.activeVoteValue) {
+  if (!item) return;
+
+  const likeCount = document.querySelector("#detailLikeCount");
+  const dislikeCount = document.querySelector("#detailDislikeCount");
+  if (likeCount) likeCount.textContent = formatReactionCount("赞", item.like_count);
+  if (dislikeCount) dislikeCount.textContent = formatReactionCount("踩", item.dislike_count);
+
+  document.querySelectorAll("[data-vote-value]").forEach((button) => {
+    button.classList.toggle("is-active", Number(button.dataset.voteValue) === voteValue);
+  });
+}
+
+async function loadCurrentVote() {
+  const item = state.activeSubmission;
+  if (!client || !state.session || !item) {
+    state.activeVoteValue = 0;
+    updateReactionUi(item, 0);
+    return;
+  }
+
+  const { data, error } = await client
+    .from("submission_votes")
+    .select("value")
+    .eq("submission_id", item.id)
+    .eq("user_id", state.session.user.id)
+    .limit(1);
+
+  if (state.activeSubmission?.id !== item.id) return;
+
+  if (error) {
+    const notice = document.querySelector("#reactionNotice");
+    if (notice) {
+      notice.textContent = error.message;
+      notice.style.color = "#8f0000";
+    }
+    return;
+  }
+
+  state.activeVoteValue = Number(data?.[0]?.value || 0);
+  updateReactionUi(item, state.activeVoteValue);
+}
+
+async function submitSubmissionVote(value) {
+  const item = state.activeSubmission;
+  const notice = document.querySelector("#reactionNotice");
+  if (!item) return;
+
+  if (!client) {
+    if (notice) {
+      notice.textContent = "演示模式不会保存点赞或点踩。";
+      notice.style.color = "";
+    }
+    return;
+  }
+
+  if (!state.session) {
+    if (notice) {
+      notice.textContent = "请先登录再点赞或点踩。";
+      notice.style.color = "#8f0000";
+    }
+    showToast("请先登录再点赞或点踩。");
+    return;
+  }
+
+  const nextValue = state.activeVoteValue === value ? 0 : value;
+  const query = client
+    .from("submission_votes")
+    .delete()
+    .eq("submission_id", item.id)
+    .eq("user_id", state.session.user.id);
+
+  const { error } =
+    nextValue === 0
+      ? await query
+      : await client.from("submission_votes").upsert(
+          {
+            submission_id: item.id,
+            user_id: state.session.user.id,
+            value: nextValue,
+          },
+          { onConflict: "submission_id,user_id" },
+        );
+
+  if (error) {
+    if (notice) {
+      notice.textContent = error.message;
+      notice.style.color = "#8f0000";
+    }
+    showToast(error.message);
+    return;
+  }
+
+  await loadSubmissions();
+  const refreshed = state.submissions.find((entry) => entry.id === item.id) || item;
+  state.activeSubmission = refreshed;
+  state.activeVoteValue = nextValue;
+  updateReactionUi(refreshed, nextValue);
+
+  if (notice) {
+    notice.textContent = nextValue === 1 ? "已点赞。" : nextValue === -1 ? "已点踩。" : "已取消反馈。";
+    notice.style.color = "";
+  }
+}
+
+function getCommentDisplayName(comment) {
+  return comment?.display_name || "匿名用户";
+}
+
+function updateReplyContext() {
+  const context = document.querySelector("#replyContext");
+  const label = context?.querySelector("span");
+  if (!context || !label) return;
+
+  if (!state.activeCommentReply) {
+    context.classList.add("hidden");
+    label.textContent = "";
+    return;
+  }
+
+  context.classList.remove("hidden");
+  label.innerHTML = `正在回复 <strong>${escapeHtml(state.activeCommentReply.displayName)}</strong>`;
+}
+
+function setReplyTarget(comment) {
+  state.activeCommentReply = {
+    id: comment.id,
+    displayName: getCommentDisplayName(comment),
+  };
+  updateReplyContext();
+  const textarea = document.querySelector('#commentForm textarea[name="body"]');
+  textarea?.focus();
+}
+
+function clearReplyTarget() {
+  state.activeCommentReply = null;
+  updateReplyContext();
+}
+
+function safeFileName(value, fallback = "mufc-chart") {
+  const text = String(value || fallback)
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, " ");
+  return text || fallback;
+}
+
+function legacyTitleValue(value) {
+  return String(value || "未命名谱面").trim().slice(0, 80) || "未命名谱面";
+}
+
+function extensionFromUrl(url, fallback) {
+  try {
+    const pathname = new URL(url).pathname;
+    const name = pathname.split("/").pop() || "";
+    const extension = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+    return extension || fallback;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+async function addUrlToZip(zip, fileName, url) {
+  if (!url) return;
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`${fileName} 下载失败：${response.status}`);
+  zip.file(fileName, await response.blob());
+}
+
+async function downloadSubmissionPackage(item) {
+  const button = document.querySelector("#downloadChartButton");
+  if (!item || !button) return;
+
+  if (!window.JSZip) {
+    showToast("下载组件加载失败，请刷新页面后重试。", "error");
+    return;
+  }
+
+  const defaultText = button.textContent;
+  button.disabled = true;
+  button.textContent = "打包中...";
+  try {
+    const zip = new window.JSZip();
+    await addUrlToZip(zip, "maidata.txt", item.maidata_url);
+    await addUrlToZip(zip, "track.mp3", item.track_url);
+    await addUrlToZip(zip, `bg${extensionFromUrl(item.bg_url || item.image_url, ".png")}`, item.bg_url || item.image_url);
+    await addUrlToZip(zip, "pv.mp4", item.pv_url);
+
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeFileName(item.song_title || item.title)}.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    showToast(error.message || "下载失败。", "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = defaultText;
+  }
+}
+
 function renderComments(comments) {
   const list = document.querySelector("#commentList");
   const count = document.querySelector("#commentCount");
@@ -1475,23 +1821,85 @@ function renderComments(comments) {
     return;
   }
 
+  const byId = new Map(comments.map((comment) => [comment.id, comment]));
+  const roots = [];
+  const repliesByRoot = new Map();
+
   comments.forEach((comment) => {
+    if (!comment.parent_id) {
+      roots.push(comment);
+      return;
+    }
+
+    const parent = byId.get(comment.parent_id);
+    const rootId = parent?.parent_id || comment.parent_id;
+    if (!byId.has(rootId)) {
+      roots.push(comment);
+      return;
+    }
+
+    if (!repliesByRoot.has(rootId)) {
+      repliesByRoot.set(rootId, []);
+    }
+    repliesByRoot.get(rootId).push(comment);
+  });
+
+  roots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  repliesByRoot.forEach((items) => {
+    items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  });
+
+  const createCommentNode = (comment, isReply = false) => {
     const item = document.createElement("article");
-    item.className = "comment-item";
+    item.className = `comment-item${isReply ? " is-reply" : ""}`;
     const score =
       comment.user_score !== null && typeof comment.user_score !== "undefined"
         ? `${Number(comment.user_score).toFixed(1)} / 10`
         : "未评分";
+    const author = getCommentDisplayName(comment);
+    const parentName = comment.parent_display_name || byId.get(comment.parent_id)?.display_name || "某位用户";
+    const replyPrefix = isReply ? `<p class="reply-prefix">${escapeHtml(author)} 回复 ${escapeHtml(parentName)}：</p>` : "";
+    const avatar = comment.avatar_url
+      ? `<img src="${escapeHtml(comment.avatar_url)}" alt="" />`
+      : `<span>${escapeHtml(getInitials(author))}</span>`;
 
     item.innerHTML = `
+      ${replyPrefix}
       <div class="comment-meta">
-        <strong>${escapeHtml(comment.display_name || "匿名用户")}</strong>
-        <span>${escapeHtml(score)}</span>
-        <time>${escapeHtml(formatDateTime(comment.created_at))}</time>
+        <div class="comment-avatar">${avatar}</div>
+        <div class="comment-author-line">
+          <strong>${escapeHtml(author)}</strong>
+          <span>${escapeHtml(score)}</span>
+          <time>${escapeHtml(formatDateTime(comment.created_at))}</time>
+        </div>
       </div>
       <div class="comment-body">${renderMarkdown(comment.body)}</div>
+      <div class="comment-tools">
+        <button class="link-button" type="button">回复</button>
+      </div>
     `;
-    list.append(item);
+    item.querySelector(".comment-tools button")?.addEventListener("click", () => setReplyTarget(comment));
+    return item;
+  };
+
+  roots.forEach((comment) => {
+    const rootNode = createCommentNode(comment);
+    list.append(rootNode);
+    const replies = repliesByRoot.get(comment.id) || [];
+    if (replies.length) {
+      const toggle = document.createElement("button");
+      toggle.className = "link-button reply-toggle";
+      toggle.type = "button";
+      toggle.textContent = `展开 ${replies.length} 条回复`;
+      const repliesNode = document.createElement("div");
+      repliesNode.className = "comment-replies hidden";
+      replies.forEach((reply) => repliesNode.append(createCommentNode(reply, true)));
+      toggle.addEventListener("click", () => {
+        const isHidden = repliesNode.classList.toggle("hidden");
+        toggle.textContent = isHidden ? `展开 ${replies.length} 条回复` : "收起回复";
+      });
+      list.append(toggle, repliesNode);
+    }
   });
 }
 
@@ -1555,7 +1963,7 @@ async function loadComments() {
 
   const { data, error } = await client
     .from("submission_comments")
-    .select("id,body,display_name,user_score,created_at,updated_at")
+    .select("id,body,parent_id,display_name,avatar_url,parent_display_name,user_score,created_at,updated_at")
     .eq("submission_id", item.id)
     .order("created_at", { ascending: false });
 
@@ -1613,6 +2021,7 @@ async function submitComment(event) {
     const { error } = await client.from("comments").insert({
       submission_id: item.id,
       user_id: state.session.user.id,
+      parent_id: state.activeCommentReply?.id || null,
       body,
     });
 
@@ -1626,6 +2035,7 @@ async function submitComment(event) {
     }
 
     formElement.reset();
+    clearReplyTarget();
     if (notice) {
       notice.textContent = "评论已发表。";
       notice.style.color = "";
@@ -1650,11 +2060,14 @@ async function submitRating(event) {
     return;
   }
 
-  const { error } = await client.from("ratings").upsert({
-    submission_id: state.activeSubmission.id,
-    user_id: state.session.user.id,
-    score,
-  });
+  const { error } = await client.from("ratings").upsert(
+    {
+      submission_id: state.activeSubmission.id,
+      user_id: state.session.user.id,
+      score,
+    },
+    { onConflict: "submission_id,user_id" },
+  );
 
   if (error) {
     setNotice(els.authNotice, error.message, true);
@@ -1754,12 +2167,31 @@ async function handleSubmission(event) {
 
   setFormBusy(formElement, true, "提交中...");
   try {
+    if (!state.profile?.is_admin) {
+      const { count, error } = await client
+        .from("submissions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", state.session.user.id);
+
+      if (error) {
+        setNotice(els.submitNotice, error.message, true);
+        return;
+      }
+
+      if (Number(count || 0) > 0) {
+        setNotice(els.submitNotice, "普通用户只能提交一张谱面。如需替换作品，请联系管理员。", true);
+        return;
+      }
+    }
+
     const form = new FormData(formElement);
     const maidata = getRequiredFile(form, "maidata", ["maidata.txt"]);
     const track = getRequiredFile(form, "track", ["track.mp3"]);
     const bg = getRequiredFile(form, "bg", ["bg.jpg", "bg.png"]);
     const pv = getOptionalFile(form, "pv", ["pv.mp4"]);
-    const defaultLevel = await detectDefaultMajdataLevel(maidata);
+    const metadata = await parseMaidataFile(maidata);
+    const fullTitle = metadata.songTitle || String(form.get("title") || "").trim() || "未命名谱面";
+    const title = legacyTitleValue(fullTitle);
     const submissionId = crypto.randomUUID();
     const basePath = `${state.session.user.id}/${submissionId}`;
     const files = [
@@ -1792,7 +2224,7 @@ async function handleSubmission(event) {
     const insert = await client.from("submissions").insert({
       id: submissionId,
       user_id: state.session.user.id,
-      title: form.get("title"),
+      title,
       description: form.get("description"),
       image_path: bgPath,
       image_url: urls.bg,
@@ -1800,7 +2232,11 @@ async function handleSubmission(event) {
       track_url: urls.track,
       bg_url: urls.bg,
       pv_url: urls.pv || null,
-      level: defaultLevel,
+      level: metadata.defaultLevel,
+      level_value: metadata.levelValue || null,
+      song_title: metadata.songTitle || fullTitle,
+      song_artist: metadata.songArtist || null,
+      charter_name: metadata.charterName || null,
     });
 
     if (insert.error) {

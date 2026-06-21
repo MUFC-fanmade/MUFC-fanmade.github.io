@@ -4,18 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MUFC Chart Contest</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23f04d88'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='24' font-family='Arial' font-weight='700' fill='white'%3EMU%3C/text%3E%3C/svg%3E" />
+    <link rel="icon" href="assets/cat.gif" />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260621-detail-spacing" />
     <script src="config.js?v=20260530-chartpack"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   </head>
   <body>
     <header class="topbar">
       <a class="brand" href="#home" aria-label="MUFC Chart Contest home">
-        <span class="crest">MU</span>
+        <img class="crest" src="assets/cat.gif" alt="" />
         <span>MUFC Chart Contest</span>
       </a>
       <nav class="nav-actions">
@@ -37,7 +38,7 @@
           <p class="eyebrow">Multi-University Fanmade Contest</p>
           <h1>高校舞萌 DX 谱面创作比赛作品墙</h1>
           <p>
-            面向高校在校生与毕业生的 fanmade 谱面创作活动。受邀用户可以提交一张谱面展示图，登录后可进入详情页评分，首页展示作品、均分与评分数量。
+            面向高校在校生与毕业生的 fanmade 谱面创作活动。普通用户可提交一张谱面展示图，登录后可进入详情页评分、点赞、点踩与评论，首页展示作品互动人数。
           </p>
           <div class="hero-actions">
             <button class="primary-button" data-route="submit">提交谱面</button>
@@ -142,11 +143,11 @@
           </div>
           <form id="submissionForm" class="submit-form">
             <label>
-              标题
-              <input name="title" maxlength="80" required placeholder="例如：宴星回廊 Master" />
+              展示标题（可选，默认读取 maidata.txt 的 &title=）
+              <input name="title" maxlength="80" placeholder="例如：宴星回廊 Master" />
             </label>
             <label>
-              说明
+              说明（可选）
               <textarea name="description" maxlength="500" rows="5" placeholder="写一点作品背景"></textarea>
             </label>
             <label>
@@ -281,17 +282,20 @@
           </div>
           <div class="chart-detail-strip">
             <div class="chart-artwork" id="chartArtwork"></div>
-            <section class="chart-level-panel hidden" id="chartLevelPanel">
-              <div class="panel-heading compact-heading">
-                <h3>谱面详情</h3>
-                <span class="score-pill" id="chartLevelCount">0</span>
+            <section class="chart-main-panel">
+              <section class="chart-level-panel hidden" id="chartLevelPanel">
+                <div class="panel-heading compact-heading">
+                  <h3>谱面详情</h3>
+                  <span class="score-pill" id="chartLevelCount">0</span>
+                </div>
+                <div class="level-button-row" id="chartLevelButtons"></div>
+                <p class="notice" id="chartLevelNotice"></p>
+              </section>
+              <div class="chart-level-panel hidden" id="chartLevelFallback">
+                <p class="notice" id="chartLevelFallbackText"></p>
               </div>
-              <div class="level-button-row" id="chartLevelButtons"></div>
-              <p class="notice" id="chartLevelNotice"></p>
+              <div class="song-info-body" id="songInfoBody"></div>
             </section>
-            <div class="chart-level-panel hidden" id="chartLevelFallback">
-              <p class="notice" id="chartLevelFallbackText"></p>
-            </div>
           </div>
           <article class="detail" id="detailContent"></article>
         </section>
@@ -352,8 +356,8 @@
                   <select id="adminSubmitterSelect" name="submitterId" required></select>
                 </label>
                 <label>
-                  标题
-                  <input name="title" maxlength="80" required />
+                  展示标题（可选，默认读取 maidata.txt 的 &title=）
+                  <input name="title" maxlength="80" />
                 </label>
                 <label>
                   说明
@@ -472,12 +476,14 @@
           <p></p>
           <div class="score-row">
             <span class="score-pill"></span>
+            <span class="reaction-pill" data-like-count></span>
+            <span class="reaction-pill" data-dislike-count></span>
             <button class="secondary-button" type="button">评分</button>
           </div>
         </div>
       </article>
     </template>
 
-    <script src="app.js?v=20260620-admin-identity-password"></script>
+    <script src="app.js?v=20260621-detail-layout-target"></script>
   </body>
 </html>
