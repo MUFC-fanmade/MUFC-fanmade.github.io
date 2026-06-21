@@ -6,7 +6,7 @@
     <title>MUFC Chart Contest</title>
     <link rel="icon" href="assets/cat.gif" />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-    <link rel="stylesheet" href="styles.css?v=20260621-inbox" />
+    <link rel="stylesheet" href="styles.css?v=20260621-submission-limit" />
     <script src="config.js?v=20260530-chartpack"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
@@ -376,6 +376,19 @@
               <span class="score-pill" id="adminSubmissionCount">0</span>
             </div>
 
+            <form id="adminSubmissionLimitForm" class="admin-action-form submission-limit-form">
+              <label class="toggle-field">
+                <input id="adminSubmissionLimitEnabled" name="limitEnabled" type="checkbox" />
+                <span>限制普通用户提交数量</span>
+              </label>
+              <label>
+                最大提交数量
+                <input id="adminSubmissionLimitMax" name="maxSubmissions" type="number" min="1" max="100" step="1" required />
+              </label>
+              <button class="primary-button" type="submit">保存限制</button>
+              <p class="notice" id="adminSubmissionLimitStatus"></p>
+            </form>
+
             <div class="admin-action-grid">
               <form id="adminSubmissionForm" class="admin-action-form">
                 <h4>后台上传谱面</h4>
@@ -546,6 +559,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260621-inbox"></script>
+    <script src="app.js?v=20260621-submission-limit"></script>
   </body>
 </html>

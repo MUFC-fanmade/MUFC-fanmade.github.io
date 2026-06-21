@@ -82,6 +82,10 @@ const state = {
   adminInvites: [],
   adminMessages: [],
   inboxMessages: [],
+  adminSubmissionLimit: {
+    enabled: true,
+    maxCount: 1,
+  },
   adminTab: "users",
   chartQuery: "",
   activeSubmission: null,
@@ -149,6 +153,10 @@ const els = {
   adminMessageTarget: document.querySelector("#adminMessageTarget"),
   adminMessageUserSelect: document.querySelector("#adminMessageUserSelect"),
   adminSubmissionForm: document.querySelector("#adminSubmissionForm"),
+  adminSubmissionLimitForm: document.querySelector("#adminSubmissionLimitForm"),
+  adminSubmissionLimitEnabled: document.querySelector("#adminSubmissionLimitEnabled"),
+  adminSubmissionLimitMax: document.querySelector("#adminSubmissionLimitMax"),
+  adminSubmissionLimitStatus: document.querySelector("#adminSubmissionLimitStatus"),
   adminSubmitterSelect: document.querySelector("#adminSubmitterSelect"),
   adminFileForm: document.querySelector("#adminFileForm"),
   adminFileSubmissionSelect: document.querySelector("#adminFileSubmissionSelect"),
@@ -1009,6 +1017,25 @@ function syncAdminSelects() {
   }
 }
 
+function renderAdminSubmissionLimit() {
+  if (!els.adminSubmissionLimitForm) return;
+
+  const enabled = Boolean(state.adminSubmissionLimit?.enabled);
+  const maxCount = Number(state.adminSubmissionLimit?.maxCount || 1);
+  if (els.adminSubmissionLimitEnabled) {
+    els.adminSubmissionLimitEnabled.checked = enabled;
+  }
+  if (els.adminSubmissionLimitMax) {
+    els.adminSubmissionLimitMax.value = String(maxCount);
+    els.adminSubmissionLimitMax.disabled = !enabled;
+  }
+  if (els.adminSubmissionLimitStatus) {
+    els.adminSubmissionLimitStatus.textContent = enabled
+      ? `当前普通用户最多可提交 ${maxCount} 张谱面。`
+      : "当前普通用户提交数量不受限制。";
+  }
+}
+
 function renderAdminData() {
   els.adminUserCount.textContent = String(state.adminUsers.length);
   els.adminSubmissionCount.textContent = String(state.adminSubmissions.length);
@@ -1018,6 +1045,7 @@ function renderAdminData() {
   if (els.adminMessageCount) els.adminMessageCount.textContent = String(state.adminMessages.length);
   syncAdminSelects();
   updateAdminMessageTargetUi();
+  renderAdminSubmissionLimit();
 
   renderAdminTable(
     els.adminUsersTable,
@@ -1148,13 +1176,14 @@ async function loadAdminData() {
   }
 
   setNotice(els.adminNotice, "加载中...");
-  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult, messagesResult] = await Promise.all([
+  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult, messagesResult, limitResult] = await Promise.all([
     client.rpc("admin_user_rows"),
     client.rpc("admin_submission_rows"),
     client.rpc("admin_rating_rows"),
     client.rpc("admin_comment_rows"),
     client.rpc("admin_invite_rows"),
     client.rpc("admin_message_rows"),
+    client.rpc("admin_submission_limit_settings"),
   ]);
 
   const error =
@@ -1163,7 +1192,8 @@ async function loadAdminData() {
     ratingsResult.error ||
     commentsResult.error ||
     invitesResult.error ||
-    messagesResult.error;
+    messagesResult.error ||
+    limitResult.error;
   if (error) {
     setNotice(els.adminNotice, error.message, true);
     state.adminUsers = [];
@@ -1182,6 +1212,11 @@ async function loadAdminData() {
   state.adminComments = commentsResult.data || [];
   state.adminInvites = invitesResult.data || [];
   state.adminMessages = messagesResult.data || [];
+  const limitSettings = Array.isArray(limitResult.data) ? limitResult.data[0] : limitResult.data;
+  state.adminSubmissionLimit = {
+    enabled: Boolean(limitSettings?.limit_enabled),
+    maxCount: Number(limitSettings?.max_submissions || 1),
+  };
   renderAdminData();
   setAdminTab(state.adminTab);
   setNotice(els.adminNotice, "");
@@ -1226,6 +1261,49 @@ async function deleteAdminSubmission(submissionId) {
 
   await Promise.all([loadSubmissions(), loadAdminData()]);
   setNotice(els.adminNotice, "谱面已删除。");
+}
+
+function updateAdminSubmissionLimitUi() {
+  if (!els.adminSubmissionLimitEnabled || !els.adminSubmissionLimitMax) return;
+  els.adminSubmissionLimitMax.disabled = !els.adminSubmissionLimitEnabled.checked;
+}
+
+async function handleAdminSubmissionLimit(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  const enabled = Boolean(els.adminSubmissionLimitEnabled?.checked);
+  const maxCount = Number(els.adminSubmissionLimitMax?.value || 1);
+
+  if (!Number.isInteger(maxCount) || maxCount < 1 || maxCount > 100) {
+    setNotice(els.adminNotice, "最大提交数量需要是 1 到 100 之间的整数。", true);
+    return;
+  }
+
+  setFormBusy(formElement, true, "保存中...");
+  setNotice(els.adminNotice, "正在保存提交限制...");
+  try {
+    const { data, error } = await client.rpc("admin_update_submission_limit", {
+      p_limit_enabled: enabled,
+      p_max_submissions: maxCount,
+    });
+
+    if (error) {
+      setNotice(els.adminNotice, error.message, true);
+      return;
+    }
+
+    const settings = Array.isArray(data) ? data[0] : data;
+    state.adminSubmissionLimit = {
+      enabled: Boolean(settings?.limit_enabled),
+      maxCount: Number(settings?.max_submissions || maxCount),
+    };
+    renderAdminSubmissionLimit();
+    setNotice(els.adminNotice, "普通用户提交限制已保存。");
+  } finally {
+    setFormBusy(formElement, false);
+  }
 }
 
 async function handleAdminInvite(event) {
@@ -2404,6 +2482,23 @@ async function handleRegister(event) {
   }
 }
 
+async function loadSubmissionLimitSettings() {
+  if (!client) {
+    return { enabled: true, maxCount: 1 };
+  }
+
+  const { data, error } = await client.rpc("submission_limit_settings");
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const settings = Array.isArray(data) ? data[0] : data;
+  return {
+    enabled: Boolean(settings?.limit_enabled),
+    maxCount: Number(settings?.max_submissions || 1),
+  };
+}
+
 async function handleSubmission(event) {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -2422,19 +2517,26 @@ async function handleSubmission(event) {
   setFormBusy(formElement, true, "提交中...");
   try {
     if (!state.profile?.is_admin) {
-      const { count, error } = await client
-        .from("submissions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", state.session.user.id);
+      const limitSettings = await loadSubmissionLimitSettings();
+      if (limitSettings.enabled) {
+        const { count, error } = await client
+          .from("submissions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", state.session.user.id);
 
-      if (error) {
-        setNotice(els.submitNotice, error.message, true);
-        return;
-      }
+        if (error) {
+          setNotice(els.submitNotice, error.message, true);
+          return;
+        }
 
-      if (Number(count || 0) > 0) {
-        setNotice(els.submitNotice, "普通用户只能提交一张谱面。如需替换作品，请联系管理员。", true);
-        return;
+        if (Number(count || 0) >= limitSettings.maxCount) {
+          setNotice(
+            els.submitNotice,
+            `普通用户最多只能提交 ${limitSettings.maxCount} 张谱面。如需替换或增加额度，请联系管理员。`,
+            true,
+          );
+          return;
+        }
       }
     }
 
@@ -2579,6 +2681,8 @@ document.querySelectorAll("[data-admin-tab]").forEach((button) => {
   button.addEventListener("click", () => setAdminTab(button.dataset.adminTab));
 });
 els.adminSubmissionForm?.addEventListener("submit", handleAdminSubmission);
+els.adminSubmissionLimitForm?.addEventListener("submit", handleAdminSubmissionLimit);
+els.adminSubmissionLimitEnabled?.addEventListener("change", updateAdminSubmissionLimitUi);
 els.adminFileForm?.addEventListener("submit", replaceAdminSubmissionFile);
 els.adminFileForm
   ?.querySelector("[data-admin-delete-file]")

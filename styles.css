@@ -605,6 +605,31 @@ textarea {
   margin: 0;
 }
 
+.submission-limit-form {
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
+  align-items: end;
+}
+
+.submission-limit-form .notice {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.toggle-field {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  font-weight: 800;
+}
+
+.toggle-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .admin-message-form {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
@@ -1327,6 +1352,7 @@ textarea {
 
   .admin-action-grid,
   .compact-admin-form,
+  .submission-limit-form,
   .admin-message-form {
     grid-template-columns: 1fr;
   }
