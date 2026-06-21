@@ -88,6 +88,7 @@ const state = {
   },
   adminTab: "users",
   chartQuery: "",
+  chartPage: 0,
   activeSubmission: null,
   activeVoteValue: 0,
   activeCommentReply: null,
@@ -120,6 +121,8 @@ const els = {
   allChartsGrid: document.querySelector("#allChartsGrid"),
   chartSearch: document.querySelector("#chartSearch"),
   allChartCount: document.querySelector("#allChartCount"),
+  recentComments: document.querySelector("#recentComments"),
+  popularGrid: document.querySelector("#popularGrid"),
   refreshGallery: document.querySelector("#refreshGallery"),
   refreshProfile: document.querySelector("#refreshProfile"),
   submissionForm: document.querySelector("#submissionForm"),
@@ -178,6 +181,8 @@ const els = {
   majdataFrame: document.querySelector("#majdataFrame"),
   chartArtwork: document.querySelector("#chartArtwork"),
   songInfoBody: document.querySelector("#songInfoBody"),
+  chartDescription: document.querySelector("#chartDescription"),
+  detailRatingCard: document.querySelector("#detailRatingCard"),
   chartLevelPanel: document.querySelector("#chartLevelPanel"),
   chartLevelFallback: document.querySelector("#chartLevelFallback"),
   chartLevelFallbackText: document.querySelector("#chartLevelFallbackText"),
@@ -369,23 +374,99 @@ function renderSubmissionCards(container, submissions, emptyText) {
 
     image.src = item.image_url;
     image.alt = item.title;
-    node.querySelector("h3").textContent = item.song_title || item.title;
-    node.querySelector("p").textContent = [item.song_artist ? `曲师 ${item.song_artist}` : "", item.charter_name ? `谱师 ${item.charter_name}` : ""]
-      .filter(Boolean)
-      .join(" / ") || item.description || "未填写说明";
-    node.querySelector(".score-pill").textContent = [formatChartNumber(item), formatScore(item)].filter(Boolean).join(" · ");
+    const chartNum = formatChartNumber(item);
+    const numEl = node.querySelector(".card-number");
+    if (numEl) {
+      numEl.textContent = chartNum || "";
+      numEl.classList.toggle("hidden", !chartNum);
+      numEl.style.cursor = "pointer";
+      numEl.addEventListener("click", () => openDetail(item.id));
+    }
+    const titleEl = node.querySelector("h3");
+    const titleText = item.song_title || item.title;
+    titleEl.innerHTML = `<span>${escapeHtml(titleText)}</span>`;
+    titleEl.style.cursor = "pointer";
+    titleEl.addEventListener("click", () => openDetail(item.id));
+    const metaEl = node.querySelector("p");
+    metaEl.innerHTML = "";
+    const artistLine = document.createElement("span");
+    artistLine.className = "card-meta-line";
+    artistLine.innerHTML = `<span>${escapeHtml(item.song_artist || "未填写曲师")}</span>`;
+    metaEl.append(artistLine);
+    const charterLine = document.createElement("span");
+    charterLine.className = "card-meta-line";
+    charterLine.innerHTML = `<span>${escapeHtml(item.charter_name || "未填写谱师")}</span>`;
+    metaEl.append(charterLine);
+    node.querySelector(".score-pill").classList.add("hidden");
     node.querySelector("[data-like-count]").textContent = formatReactionCount("赞", item.like_count);
     node.querySelector("[data-dislike-count]").textContent = formatReactionCount("踩", item.dislike_count);
 
     imageButton.addEventListener("click", () => openDetail(item.id));
     rateButton.addEventListener("click", () => openDetail(item.id));
     container.append(node);
+
+    requestAnimationFrame(() => {
+      node.querySelectorAll(".card-meta-line span, .card-title-row h3 span").forEach((span) => {
+        const parent = span.parentElement;
+        if (span.scrollWidth > parent.clientWidth) {
+          span.classList.add("is-overflow");
+        }
+      });
+    });
   });
 }
 
 function renderGallery() {
-  const latest = state.submissions.slice(0, 5);
-  renderSubmissionCards(els.galleryGrid, latest, "还没有作品，成为第一个提交谱面的人。");
+  const sorted = [...state.submissions].sort((a, b) => {
+    const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return db - da;
+  });
+  const recent = sorted.slice(0, 8);
+  renderSubmissionCards(els.galleryGrid, recent, "还没有作品。");
+  renderPopular();
+  loadRecentComments();
+}
+
+function renderPopular() {
+  if (!els.popularGrid) return;
+  const sorted = [...state.submissions].sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
+  const top = sorted.slice(0, 8);
+  renderSubmissionCards(els.popularGrid, top, "还没有谱面数据。");
+}
+
+async function loadRecentComments() {
+  if (!els.recentComments) return;
+  if (!client) {
+    els.recentComments.innerHTML = '<div class="empty-state compact-empty">演示模式暂无评论。</div>';
+    return;
+  }
+  const { data, error } = await client
+    .from("submission_comments")
+    .select("id,body,display_name,created_at,submission_id")
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (error || !data?.length) {
+    els.recentComments.innerHTML = '<div class="empty-state compact-empty">还没有评论。</div>';
+    return;
+  }
+  els.recentComments.innerHTML = data.map((c) => {
+    const submission = state.submissions.find((s) => s.id === c.submission_id);
+    const title = submission?.song_title || submission?.title || "未知谱面";
+    return `
+      <div class="recent-comment-item" data-submission-id="${escapeHtml(c.submission_id)}">
+        <span class="recent-comment-title">${escapeHtml(title)}</span>
+        <div class="recent-comment-meta">
+          <strong>${escapeHtml(c.display_name || "匿名")}</strong>
+          <span class="recent-comment-body">${escapeHtml(c.body || "").slice(0, 100)}${c.body && c.body.length > 100 ? "..." : ""}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  els.recentComments.querySelectorAll(".recent-comment-item").forEach((el) => {
+    el.addEventListener("click", () => openDetail(el.dataset.submissionId));
+  });
 }
 
 function getFilteredSubmissions() {
@@ -417,8 +498,32 @@ function getFilteredSubmissions() {
 function renderAllCharts() {
   if (!els.allChartsGrid) return;
   const filtered = getFilteredSubmissions();
+  const pageSize = 20;
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  if (state.chartPage >= totalPages) state.chartPage = totalPages - 1;
+  if (state.chartPage < 0) state.chartPage = 0;
+  const start = state.chartPage * pageSize;
+  const page = filtered.slice(start, start + pageSize);
   els.allChartCount.textContent = `${filtered.length} / ${state.submissions.length}`;
-  renderSubmissionCards(els.allChartsGrid, filtered, "没有找到匹配的谱面。");
+  renderSubmissionCards(els.allChartsGrid, page, "没有找到匹配的谱面。");
+
+  let pager = els.allChartsGrid.parentElement.querySelector(".chart-pager");
+  if (!pager) {
+    pager = document.createElement("div");
+    pager.className = "chart-pager";
+    els.allChartsGrid.after(pager);
+  }
+  pager.innerHTML = `
+    <button class="secondary-button" ${state.chartPage === 0 ? "disabled" : ""} type="button" id="chartPrev">上一页</button>
+    <span class="score-pill">${state.chartPage + 1} / ${totalPages}</span>
+    <button class="secondary-button" ${state.chartPage >= totalPages - 1 ? "disabled" : ""} type="button" id="chartNext">下一页</button>
+  `;
+  els.allChartsGrid.parentElement.querySelector("#chartPrev")?.addEventListener("click", () => {
+    if (state.chartPage > 0) { state.chartPage--; renderAllCharts(); }
+  });
+  els.allChartsGrid.parentElement.querySelector("#chartNext")?.addEventListener("click", () => {
+    if (state.chartPage < totalPages - 1) { state.chartPage++; renderAllCharts(); }
+  });
 }
 
 async function loadSubmissions() {
@@ -1764,22 +1869,23 @@ function renderChartLevelPanel() {
   const levels = state.activeChartLevels;
   const activeLevel = state.activeChartLevel;
 
-  els.chartLevelPanel.classList.toggle("hidden", !levels.length);
+  const displayLevels = levels.filter((level) => level.index === 5 || level.index === 6);
+
+  els.chartLevelPanel.classList.toggle("hidden", !displayLevels.length);
   els.chartLevelFallback.classList.add("hidden");
   els.chartLevelButtons.innerHTML = "";
-  els.chartLevelCount.textContent = levels.length ? `${levels.length}` : "0";
   els.chartLevelNotice.textContent = "";
   els.chartLevelNotice.classList.add("hidden");
 
-  levels.forEach((level) => {
+  displayLevels.forEach((level) => {
     const button = document.createElement("button");
     button.type = "button";
     const levelTheme = `level-${String(level.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown"}`;
     button.className = `level-button ${levelTheme}${level.maidataLevel === activeLevel ? " is-active" : ""}`;
     button.dataset.level = level.maidataLevel;
     button.innerHTML = `
-      <strong>${escapeHtml(level.value)}</strong>
       <span>${escapeHtml(level.name)}</span>
+      <strong>${escapeHtml(level.value)}</strong>
     `;
     button.addEventListener("click", () => switchChartLevel(level.maidataLevel));
     els.chartLevelButtons.append(button);
@@ -1823,7 +1929,11 @@ async function openDetail(id) {
   els.chartArtwork.innerHTML = `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" />`;
   if (els.songInfoBody) {
     els.songInfoBody.innerHTML = `
-      <p class="eyebrow">${formatScore(item)}</p>
+      <div class="info-pills">
+        <span class="reaction-pill">${escapeHtml(formatScore(item))}</span>
+        <span class="reaction-pill">${escapeHtml(formatReactionCount("赞", item.like_count))}</span>
+        <span class="reaction-pill">${escapeHtml(formatReactionCount("踩", item.dislike_count))}</span>
+      </div>
       <h2>${escapeHtml(item.song_title || item.title)}</h2>
       <div class="song-meta-grid">
         <span>编号</span>
@@ -1832,37 +1942,57 @@ async function openDetail(id) {
         <strong>${escapeHtml(item.song_artist || "未填写")}</strong>
         <span>谱师</span>
         <strong>${escapeHtml(item.charter_name || "未填写")}</strong>
-        <span>互动</span>
-        <strong>${escapeHtml(formatReactionCount("赞", item.like_count))} / ${escapeHtml(formatReactionCount("踩", item.dislike_count))}</strong>
       </div>
+      <div class="song-actions">
+        <button class="secondary-button" id="downloadChartButton" type="button">下载谱面</button>
+        <button class="secondary-button reaction-btn like-btn" data-vote-value="1" type="button">👍 <span id="detailLikeCount">${item.like_count || 0}</span></button>
+        <button class="secondary-button reaction-btn dislike-btn" data-vote-value="-1" type="button">👎 <span id="detailDislikeCount">${item.dislike_count || 0}</span></button>
+      </div>
+    `;
+  }
+  if (els.chartDescription) {
+    els.chartDescription.innerHTML = `
+      <div class="panel-heading compact-heading"><h3>谱师自述</h3></div>
       <p class="song-description">${escapeHtml(item.description || "未填写谱面简介。")}</p>
-      <button class="secondary-button download-button" id="downloadChartButton" type="button">下载谱面</button>
     `;
   }
 
+  let userScore = 0;
+  if (client && state.session) {
+    const { data: ratingData } = await client
+      .from("ratings")
+      .select("score")
+      .eq("submission_id", item.id)
+      .eq("user_id", state.session.user.id)
+      .limit(1);
+    if (ratingData?.[0]?.score) userScore = Number(ratingData[0].score);
+  }
+  const hasUserScore = userScore > 0;
+  const hue = hasUserScore ? Math.round(240 - (userScore - 1) / 9 * 240) : 0;
+  const scoreColor = hasUserScore ? `hsl(${hue}, 65%, 50%)` : "";
+  const scoreBg = hasUserScore ? `hsl(${hue}, 60%, 92%)` : "";
+  const scoreBoxes = Array.from({ length: 10 }, (_, i) => {
+    const val = i + 1;
+    const boxHue = Math.round(240 - (val - 1) / 9 * 240);
+    const boxColor = `hsl(${boxHue}, 65%, 50%)`;
+    const isActive = hasUserScore && val === Math.round(userScore) ? " is-active" : "";
+    return `<button class="score-box${isActive}" data-score="${val}" style="color:${boxColor};border-color:${boxColor};background:hsl(${boxHue},60%,92%)" type="button">${val}</button>`;
+  }).join("");
+
+  els.detailRatingCard.innerHTML = `
+    <div class="rating-head-row">
+      <div class="panel-heading compact-heading"><h3>作品评分</h3></div>
+      <span class="reaction-pill score-pill-display ${hasUserScore ? "is-scored" : "is-unscored"}"${hasUserScore ? ` style="color:${scoreColor};background:${scoreBg};border-color:${scoreColor}"` : ""}>${hasUserScore ? userScore.toFixed(1) : "暂无评分"}</span>
+    </div>
+    <div class="score-box-row">${scoreBoxes}</div>
+    <p class="notice">点击上方快捷评分，或使用下方输入框</p>
+    <form class="rating-control rating-control-detail" id="ratingForm">
+      <input name="score" type="number" min="1" max="10" step="0.1" value="9" required />
+      <button class="primary-button" type="submit">提交评分</button>
+    </form>
+  `;
+
   els.detailContent.innerHTML = `
-    <div class="rating-box function-card score-card">
-      <div>
-        <strong>给这个作品评分</strong>
-        <p class="notice">登录后可提交 1-10 分，重复评分会覆盖旧分数。</p>
-      </div>
-      <form class="rating-control" id="ratingForm">
-        <input name="score" type="number" min="1" max="10" step="0.1" value="9" required />
-        <button class="primary-button" type="submit">提交评分</button>
-      </form>
-    </div>
-    <div class="rating-box function-card reaction-box reaction-card">
-      <div>
-        <strong>谱面反馈</strong>
-        <p class="notice" id="reactionNotice">${state.session ? "登录用户可以为这个谱面点赞或点踩。" : "登录后可以点赞或点踩。"}</p>
-      </div>
-      <div class="reaction-controls">
-        <span class="reaction-pill" id="detailLikeCount">${formatReactionCount("赞", item.like_count)}</span>
-        <span class="reaction-pill" id="detailDislikeCount">${formatReactionCount("踩", item.dislike_count)}</span>
-        <button class="secondary-button reaction-button" data-vote-value="1" type="button">点赞</button>
-        <button class="secondary-button reaction-button" data-vote-value="-1" type="button">点踩</button>
-      </div>
-    </div>
     <section class="comments-panel function-card comment-card">
       <div class="panel-heading compact-heading">
         <h3>评论区</h3>
@@ -1887,6 +2017,9 @@ async function openDetail(id) {
     </section>
   `;
 
+  document.querySelectorAll(".score-box").forEach((box) => {
+    box.addEventListener("click", () => submitQuickRating(Number(box.dataset.score)));
+  });
   document.querySelector("#ratingForm").addEventListener("submit", submitRating);
   document.querySelector("#commentForm").addEventListener("submit", submitComment);
   document.querySelectorAll("[data-vote-value]").forEach((button) => {
@@ -1909,10 +2042,10 @@ async function openDetail(id) {
     if (state.activeSubmission?.id !== item.id) return;
 
     state.activeChartLevels = levels;
-    const current = levels.find((level) => level.maidataLevel === state.activeChartLevel);
+    const current = levels.find((level) => level.maidataLevel === state.activeChartLevel && (level.index === 5 || level.index === 6));
     const fallback =
       levels.find((level) => level.maidataLevel === "lv_5") ||
-      levels[levels.length - 1] ||
+      levels.find((level) => level.index === 6) ||
       null;
 
     state.activeChartLevel = (current || fallback)?.maidataLevel || state.activeChartLevel;
@@ -1925,7 +2058,6 @@ async function openDetail(id) {
     if (state.activeSubmission?.id !== item.id) return;
     els.chartLevelPanel.classList.remove("hidden");
     els.chartLevelFallback.classList.add("hidden");
-    els.chartLevelCount.textContent = "0";
     els.chartLevelButtons.innerHTML = "";
     els.chartLevelNotice.textContent = `Failed to load chart levels: ${error.message || error}`;
     els.chartLevelNotice.classList.remove("hidden");
@@ -1937,8 +2069,8 @@ function updateReactionUi(item = state.activeSubmission, voteValue = state.activ
 
   const likeCount = document.querySelector("#detailLikeCount");
   const dislikeCount = document.querySelector("#detailDislikeCount");
-  if (likeCount) likeCount.textContent = formatReactionCount("赞", item.like_count);
-  if (dislikeCount) dislikeCount.textContent = formatReactionCount("踩", item.dislike_count);
+  if (likeCount) likeCount.textContent = item.like_count || 0;
+  if (dislikeCount) dislikeCount.textContent = item.dislike_count || 0;
 
   document.querySelectorAll("[data-vote-value]").forEach((button) => {
     button.classList.toggle("is-active", Number(button.dataset.voteValue) === voteValue);
@@ -2185,8 +2317,10 @@ function renderComments(comments) {
     const item = document.createElement("article");
     item.className = `comment-item${isReply ? " is-reply" : ""}`;
     const score =
-      comment.user_score !== null && typeof comment.user_score !== "undefined"
+      comment.user_score !== null && typeof comment.user_score !== "undefined" && state.profile?.is_admin
         ? `${Number(comment.user_score).toFixed(1)} / 10`
+        : comment.user_score !== null && typeof comment.user_score !== "undefined"
+        ? "已评分"
         : "未评分";
     const author = getCommentDisplayName(comment);
     const parentName = comment.parent_display_name || byId.get(comment.parent_id)?.display_name || "某位用户";
@@ -2375,6 +2509,38 @@ async function submitComment(event) {
     await loadComments();
   } finally {
     setFormBusy(formElement, false);
+  }
+}
+
+async function submitQuickRating(score) {
+  if (!client) {
+    setNotice(els.authNotice, "演示模式不会保存评分。");
+    return;
+  }
+
+  if (!state.session) {
+    setNotice(els.authNotice, "请先登录再评分。", true);
+    return;
+  }
+
+  const { error } = await client.from("ratings").upsert(
+    {
+      submission_id: state.activeSubmission.id,
+      user_id: state.session.user.id,
+      score,
+    },
+    { onConflict: "submission_id,user_id" },
+  );
+
+  if (error) {
+    setNotice(els.authNotice, error.message, true);
+    return;
+  }
+
+  await loadSubmissions();
+  openDetail(state.activeSubmission.id);
+  if (!els.profileView.classList.contains("hidden")) {
+    await loadProfile();
   }
 }
 
@@ -2675,6 +2841,7 @@ els.markAllInboxRead?.addEventListener("click", markAllInboxMessagesRead);
 els.refreshAdmin.addEventListener("click", loadAdminData);
 els.chartSearch.addEventListener("input", (event) => {
   state.chartQuery = event.currentTarget.value;
+  state.chartPage = 0;
   renderAllCharts();
 });
 document.querySelectorAll("[data-admin-tab]").forEach((button) => {
