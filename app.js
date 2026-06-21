@@ -80,6 +80,8 @@ const state = {
   adminRatings: [],
   adminComments: [],
   adminInvites: [],
+  adminMessages: [],
+  inboxMessages: [],
   adminTab: "users",
   chartQuery: "",
   activeSubmission: null,
@@ -93,6 +95,7 @@ const state = {
 const els = {
   authToggle: document.querySelector("#authToggle"),
   profileNav: document.querySelector("#profileNav"),
+  inboxNav: document.querySelector("#inboxNav"),
   adminNav: document.querySelector("#adminNav"),
   sessionLabel: document.querySelector("#sessionLabel"),
   loginForm: document.querySelector("#loginForm"),
@@ -106,6 +109,7 @@ const els = {
   submitView: document.querySelector("#submitView"),
   authView: document.querySelector("#authView"),
   profileView: document.querySelector("#profileView"),
+  inboxView: document.querySelector("#inboxView"),
   adminView: document.querySelector("#adminView"),
   detailView: document.querySelector("#detailView"),
   galleryGrid: document.querySelector("#galleryGrid"),
@@ -118,6 +122,12 @@ const els = {
   submitNotice: document.querySelector("#submitNotice"),
   profileNotice: document.querySelector("#profileNotice"),
   profileForm: document.querySelector("#profileForm"),
+  inboxNotice: document.querySelector("#inboxNotice"),
+  refreshInbox: document.querySelector("#refreshInbox"),
+  markAllInboxRead: document.querySelector("#markAllInboxRead"),
+  inboxList: document.querySelector("#inboxList"),
+  inboxUnreadCount: document.querySelector("#inboxUnreadCount"),
+  inboxTotalCount: document.querySelector("#inboxTotalCount"),
   profileAvatar: document.querySelector("#profileAvatar"),
   profileDisplayName: document.querySelector("#profileDisplayName"),
   profileEmail: document.querySelector("#profileEmail"),
@@ -128,11 +138,16 @@ const els = {
   adminRatingsPanel: document.querySelector("#adminRatingsPanel"),
   adminCommentsPanel: document.querySelector("#adminCommentsPanel"),
   adminInvitesPanel: document.querySelector("#adminInvitesPanel"),
+  adminMessagesPanel: document.querySelector("#adminMessagesPanel"),
   adminUsersTable: document.querySelector("#adminUsersTable"),
   adminSubmissionsTable: document.querySelector("#adminSubmissionsTable"),
   adminRatingsTable: document.querySelector("#adminRatingsTable"),
   adminCommentsTable: document.querySelector("#adminCommentsTable"),
   adminInvitesTable: document.querySelector("#adminInvitesTable"),
+  adminMessagesTable: document.querySelector("#adminMessagesTable"),
+  adminMessageForm: document.querySelector("#adminMessageForm"),
+  adminMessageTarget: document.querySelector("#adminMessageTarget"),
+  adminMessageUserSelect: document.querySelector("#adminMessageUserSelect"),
   adminSubmissionForm: document.querySelector("#adminSubmissionForm"),
   adminSubmitterSelect: document.querySelector("#adminSubmitterSelect"),
   adminFileForm: document.querySelector("#adminFileForm"),
@@ -146,6 +161,7 @@ const els = {
   adminRatingCount: document.querySelector("#adminRatingCount"),
   adminCommentCount: document.querySelector("#adminCommentCount"),
   adminInviteCount: document.querySelector("#adminInviteCount"),
+  adminMessageCount: document.querySelector("#adminMessageCount"),
   mySubmissionsList: document.querySelector("#mySubmissionsList"),
   myRatingsList: document.querySelector("#myRatingsList"),
   mySubmissionCount: document.querySelector("#mySubmissionCount"),
@@ -206,6 +222,11 @@ function formatReactionCount(label, value) {
   return `${label} ${Number(value || 0)}`;
 }
 
+function formatChartNumber(item) {
+  const number = Number(item?.chart_number || 0);
+  return number ? `#${String(number).padStart(3, "0")}` : "";
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -256,6 +277,7 @@ function updateSessionUi() {
   els.sessionLabel.textContent = user ? user.email : "未登录";
   els.authToggle.textContent = user ? "退出" : "登录";
   els.profileNav.classList.toggle("hidden", !user);
+  els.inboxNav?.classList.toggle("hidden", !user);
   els.adminNav.classList.toggle("hidden", !user || !state.profile?.is_admin);
 }
 
@@ -270,6 +292,12 @@ function setAuthMode(mode) {
 function showView(name) {
   if (name === "profile" && !state.session) {
     setNotice(els.authNotice, "请先登录再查看个人中心。", true);
+    setAuthMode("login");
+    name = "auth";
+  }
+
+  if (name === "inbox" && !state.session) {
+    setNotice(els.authNotice, "请先登录再查看站内信。", true);
     setAuthMode("login");
     name = "auth";
   }
@@ -291,6 +319,7 @@ function showView(name) {
   els.submitView.classList.toggle("hidden", name !== "submit");
   els.authView.classList.toggle("hidden", name !== "auth");
   els.profileView.classList.toggle("hidden", name !== "profile");
+  els.inboxView?.classList.toggle("hidden", name !== "inbox");
   els.adminView.classList.toggle("hidden", name !== "admin");
   els.detailView.classList.toggle("hidden", name !== "detail");
   document.body.classList.toggle("is-detail-view", name === "detail");
@@ -298,6 +327,10 @@ function showView(name) {
 
   if (name === "profile") {
     loadProfile();
+  }
+
+  if (name === "inbox") {
+    loadInbox();
   }
 
   if (name === "charts") {
@@ -332,7 +365,7 @@ function renderSubmissionCards(container, submissions, emptyText) {
     node.querySelector("p").textContent = [item.song_artist ? `曲师 ${item.song_artist}` : "", item.charter_name ? `谱师 ${item.charter_name}` : ""]
       .filter(Boolean)
       .join(" / ") || item.description || "未填写说明";
-    node.querySelector(".score-pill").textContent = formatScore(item);
+    node.querySelector(".score-pill").textContent = [formatChartNumber(item), formatScore(item)].filter(Boolean).join(" · ");
     node.querySelector("[data-like-count]").textContent = formatReactionCount("赞", item.like_count);
     node.querySelector("[data-dislike-count]").textContent = formatReactionCount("踩", item.dislike_count);
 
@@ -354,6 +387,8 @@ function getFilteredSubmissions() {
   return state.submissions.filter((item) => {
     const text = [
       item.title,
+      item.chart_number,
+      formatChartNumber(item),
       item.song_title,
       item.song_artist,
       item.charter_name,
@@ -710,6 +745,139 @@ function renderProfile() {
   );
 }
 
+function getInboxKindLabel(message) {
+  if (message.kind === "comment_reply") return "回复";
+  if (message.kind === "chart_comment") return "评论";
+  if (message.kind === "admin_broadcast") return "管理员全体通知";
+  if (message.kind === "admin_direct") return "管理员通知";
+  return "站内信";
+}
+
+function renderInbox() {
+  if (!els.inboxList) return;
+
+  const messages = state.inboxMessages || [];
+  const unreadCount = messages.filter((message) => !message.read_at).length;
+  if (els.inboxUnreadCount) els.inboxUnreadCount.textContent = String(unreadCount);
+  if (els.inboxTotalCount) els.inboxTotalCount.textContent = String(messages.length);
+  if (els.markAllInboxRead) els.markAllInboxRead.disabled = unreadCount === 0;
+
+  els.inboxList.innerHTML = "";
+  if (!messages.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state compact-empty";
+    empty.textContent = "信箱里暂时没有消息。";
+    els.inboxList.append(empty);
+    return;
+  }
+
+  messages.forEach((message) => {
+    const item = document.createElement("article");
+    item.className = `inbox-item${message.read_at ? "" : " is-unread"}`;
+
+    const actions = document.createElement("div");
+    actions.className = "inbox-actions";
+
+    if (message.related_submission_id) {
+      const openButton = document.createElement("button");
+      openButton.className = "secondary-button";
+      openButton.type = "button";
+      openButton.textContent = "查看谱面";
+      openButton.addEventListener("click", () => openInboxSubmission(message.related_submission_id));
+      actions.append(openButton);
+    }
+
+    if (!message.read_at) {
+      const readButton = document.createElement("button");
+      readButton.className = "link-button";
+      readButton.type = "button";
+      readButton.textContent = "标为已读";
+      readButton.addEventListener("click", () => markInboxMessageRead(message.id));
+      actions.append(readButton);
+    }
+
+    item.innerHTML = `
+      <div class="inbox-item-head">
+        <div>
+          <span class="score-pill">${escapeHtml(getInboxKindLabel(message))}</span>
+          <h3>${escapeHtml(message.title || "站内信")}</h3>
+        </div>
+        <time>${escapeHtml(formatDateTime(message.created_at))}</time>
+      </div>
+      <div class="comment-body inbox-body">${renderMarkdown(message.body || "")}</div>
+    `;
+    if (actions.children.length) {
+      item.append(actions);
+    }
+    els.inboxList.append(item);
+  });
+}
+
+async function loadInbox() {
+  if (!client || !state.session) {
+    state.inboxMessages = [];
+    renderInbox();
+    return;
+  }
+
+  setNotice(els.inboxNotice, "加载中...");
+  const { data, error } = await client.rpc("inbox_rows");
+  if (error) {
+    state.inboxMessages = [];
+    renderInbox();
+    setNotice(els.inboxNotice, error.message, true);
+    return;
+  }
+
+  state.inboxMessages = data || [];
+  renderInbox();
+  setNotice(els.inboxNotice, "");
+}
+
+async function markInboxMessageRead(messageId) {
+  if (!client || !state.session || !messageId) return;
+
+  const { error } = await client.rpc("mark_inbox_message_read", { p_message_id: messageId });
+  if (error) {
+    setNotice(els.inboxNotice, error.message, true);
+    return;
+  }
+
+  state.inboxMessages = state.inboxMessages.map((message) =>
+    message.id === messageId ? { ...message, read_at: new Date().toISOString() } : message,
+  );
+  renderInbox();
+  setNotice(els.inboxNotice, "已标为已读。");
+}
+
+async function markAllInboxMessagesRead() {
+  if (!client || !state.session) return;
+
+  const { error } = await client.rpc("mark_all_inbox_messages_read");
+  if (error) {
+    setNotice(els.inboxNotice, error.message, true);
+    return;
+  }
+
+  const readAt = new Date().toISOString();
+  state.inboxMessages = state.inboxMessages.map((message) => ({ ...message, read_at: message.read_at || readAt }));
+  renderInbox();
+  setNotice(els.inboxNotice, "全部消息已标为已读。");
+}
+
+async function openInboxSubmission(submissionId) {
+  if (!submissionId) return;
+  if (!state.submissions.some((submission) => submission.id === submissionId)) {
+    await loadSubmissions();
+  }
+  const target = state.submissions.find((submission) => submission.id === submissionId);
+  if (!target) {
+    setNotice(els.inboxNotice, "对应谱面不存在或已被删除。", true);
+    return;
+  }
+  await openDetail(submissionId);
+}
+
 function renderAdminTable(table, columns, rows, emptyText) {
   if (!table) return;
 
@@ -833,6 +1001,12 @@ function syncAdminSelects() {
       })
       .join("");
   }
+
+  if (els.adminMessageUserSelect) {
+    els.adminMessageUserSelect.innerHTML = state.adminUsers
+      .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(formatUserLabel(user))}</option>`)
+      .join("");
+  }
 }
 
 function renderAdminData() {
@@ -841,7 +1015,9 @@ function renderAdminData() {
   els.adminRatingCount.textContent = String(state.adminRatings.length);
   els.adminCommentCount.textContent = String(state.adminComments.length);
   els.adminInviteCount.textContent = String(state.adminInvites.length);
+  if (els.adminMessageCount) els.adminMessageCount.textContent = String(state.adminMessages.length);
   syncAdminSelects();
+  updateAdminMessageTargetUi();
 
   renderAdminTable(
     els.adminUsersTable,
@@ -938,6 +1114,18 @@ function renderAdminData() {
     state.adminInvites,
     "没有邀请码数据。"
   );
+
+  renderAdminTable(
+    els.adminMessagesTable,
+    [
+      { label: "标题", key: "title" },
+      { label: "目标", render: (row) => (row.target_scope === "all" ? "全体成员" : formatUserLabel(row)) },
+      { label: "正文", key: "body" },
+      { label: "发送时间", render: (row) => formatDateTime(row.created_at) },
+    ],
+    state.adminMessages,
+    "还没有发送过站内信。"
+  );
 }
 
 function setAdminTab(tab) {
@@ -950,6 +1138,7 @@ function setAdminTab(tab) {
   els.adminRatingsPanel.classList.toggle("hidden", tab !== "ratings");
   els.adminCommentsPanel.classList.toggle("hidden", tab !== "comments");
   els.adminInvitesPanel.classList.toggle("hidden", tab !== "invites");
+  els.adminMessagesPanel?.classList.toggle("hidden", tab !== "messages");
 }
 
 async function loadAdminData() {
@@ -959,15 +1148,22 @@ async function loadAdminData() {
   }
 
   setNotice(els.adminNotice, "加载中...");
-  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult] = await Promise.all([
+  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult, messagesResult] = await Promise.all([
     client.rpc("admin_user_rows"),
     client.rpc("admin_submission_rows"),
     client.rpc("admin_rating_rows"),
     client.rpc("admin_comment_rows"),
     client.rpc("admin_invite_rows"),
+    client.rpc("admin_message_rows"),
   ]);
 
-  const error = usersResult.error || submissionsResult.error || ratingsResult.error || commentsResult.error || invitesResult.error;
+  const error =
+    usersResult.error ||
+    submissionsResult.error ||
+    ratingsResult.error ||
+    commentsResult.error ||
+    invitesResult.error ||
+    messagesResult.error;
   if (error) {
     setNotice(els.adminNotice, error.message, true);
     state.adminUsers = [];
@@ -975,6 +1171,7 @@ async function loadAdminData() {
     state.adminRatings = [];
     state.adminComments = [];
     state.adminInvites = [];
+    state.adminMessages = [];
     renderAdminData();
     return;
   }
@@ -984,6 +1181,7 @@ async function loadAdminData() {
   state.adminRatings = ratingsResult.data || [];
   state.adminComments = commentsResult.data || [];
   state.adminInvites = invitesResult.data || [];
+  state.adminMessages = messagesResult.data || [];
   renderAdminData();
   setAdminTab(state.adminTab);
   setNotice(els.adminNotice, "");
@@ -1125,6 +1323,61 @@ async function handleAdminPasswordUpdate(event) {
     setNotice(els.adminNotice, data?.message || "账户密码已修改。");
   } catch (error) {
     setNotice(els.adminNotice, error.message || "修改密码失败。", true);
+  } finally {
+    setFormBusy(formElement, false);
+  }
+}
+
+function updateAdminMessageTargetUi() {
+  if (!els.adminMessageTarget || !els.adminMessageUserSelect) return;
+  els.adminMessageUserSelect.disabled = els.adminMessageTarget.value === "all";
+}
+
+async function handleAdminMessage(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  const targetScope = String(form.get("targetScope") || "all");
+  const targetUserId = targetScope === "user" ? String(form.get("targetUserId") || "") : null;
+  const title = String(form.get("title") || "").trim();
+  const body = String(form.get("body") || "").trim();
+
+  if (!title) {
+    setNotice(els.adminNotice, "请填写站内信标题。", true);
+    return;
+  }
+
+  if (!body) {
+    setNotice(els.adminNotice, "请填写站内信正文。", true);
+    return;
+  }
+
+  if (targetScope === "user" && !targetUserId) {
+    setNotice(els.adminNotice, "请选择收信用户。", true);
+    return;
+  }
+
+  setFormBusy(formElement, true, "发送中...");
+  setNotice(els.adminNotice, "正在发送站内信...");
+  try {
+    const { error } = await client.rpc("admin_send_message", {
+      p_target_scope: targetScope,
+      p_target_user_id: targetUserId,
+      p_title: title,
+      p_body: body,
+    });
+
+    if (error) {
+      setNotice(els.adminNotice, error.message, true);
+      return;
+    }
+
+    formElement.reset();
+    updateAdminMessageTargetUi();
+    await loadAdminData();
+    setNotice(els.adminNotice, "站内信已发送。");
   } finally {
     setFormBusy(formElement, false);
   }
@@ -1443,7 +1696,8 @@ function renderChartLevelPanel() {
   levels.forEach((level) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `level-button${level.maidataLevel === activeLevel ? " is-active" : ""}`;
+    const levelTheme = `level-${String(level.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown"}`;
+    button.className = `level-button ${levelTheme}${level.maidataLevel === activeLevel ? " is-active" : ""}`;
     button.dataset.level = level.maidataLevel;
     button.innerHTML = `
       <strong>${escapeHtml(level.value)}</strong>
@@ -1494,12 +1748,12 @@ async function openDetail(id) {
       <p class="eyebrow">${formatScore(item)}</p>
       <h2>${escapeHtml(item.song_title || item.title)}</h2>
       <div class="song-meta-grid">
+        <span>编号</span>
+        <strong>${escapeHtml(formatChartNumber(item) || "未编号")}</strong>
         <span>曲师</span>
         <strong>${escapeHtml(item.song_artist || "未填写")}</strong>
         <span>谱师</span>
         <strong>${escapeHtml(item.charter_name || "未填写")}</strong>
-        <span>默认难度</span>
-        <strong>${escapeHtml([item.level_value, getMaidataLevelName(item.level)].filter(Boolean).join(" "))}</strong>
         <span>互动</span>
         <strong>${escapeHtml(formatReactionCount("赞", item.like_count))} / ${escapeHtml(formatReactionCount("踩", item.dislike_count))}</strong>
       </div>
@@ -2283,6 +2537,8 @@ async function initSession() {
       state.adminRatings = [];
       state.adminComments = [];
       state.adminInvites = [];
+      state.adminMessages = [];
+      state.inboxMessages = [];
       updateSessionUi();
     }
   });
@@ -2312,6 +2568,8 @@ els.submissionForm.addEventListener("submit", handleSubmission);
 els.profileForm.addEventListener("submit", handleProfileUpdate);
 els.refreshGallery.addEventListener("click", loadSubmissions);
 els.refreshProfile.addEventListener("click", loadProfile);
+els.refreshInbox?.addEventListener("click", loadInbox);
+els.markAllInboxRead?.addEventListener("click", markAllInboxMessagesRead);
 els.refreshAdmin.addEventListener("click", loadAdminData);
 els.chartSearch.addEventListener("input", (event) => {
   state.chartQuery = event.currentTarget.value;
@@ -2327,6 +2585,8 @@ els.adminFileForm
   ?.addEventListener("click", deleteAdminSubmissionFile);
 els.adminInviteForm?.addEventListener("submit", handleAdminInvite);
 els.adminPasswordForm?.addEventListener("submit", handleAdminPasswordUpdate);
+els.adminMessageForm?.addEventListener("submit", handleAdminMessage);
+els.adminMessageTarget?.addEventListener("change", updateAdminMessageTargetUi);
 els.adminRatingsTable?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-admin-delete-rating]");
   if (button) deleteAdminRating(button.dataset.adminDeleteRating);
@@ -2345,7 +2605,8 @@ async function initApp() {
     await openDetail(decodeURIComponent(route.slice("detail=".length)));
     return;
   }
-  showView(["home", "charts", "guide", "submit", "auth", "profile", "admin"].includes(route) ? route : "home");
+  updateAdminMessageTargetUi();
+  showView(["home", "charts", "guide", "submit", "auth", "profile", "inbox", "admin"].includes(route) ? route : "home");
 }
 
 initApp();

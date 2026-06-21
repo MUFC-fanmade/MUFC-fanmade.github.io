@@ -503,6 +503,55 @@ textarea {
   line-height: 1.5;
 }
 
+.inbox-counts,
+.inbox-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.inbox-list {
+  display: grid;
+  gap: 12px;
+}
+
+.inbox-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.inbox-item.is-unread {
+  border-color: rgb(224 68 127 / 42%);
+  background: rgb(224 68 127 / 7%);
+}
+
+.inbox-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.inbox-item-head h3 {
+  margin: 8px 0 0;
+  font-size: 18px;
+}
+
+.inbox-item-head time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.inbox-body {
+  padding-top: 0;
+}
+
 .admin-tabs {
   display: flex;
   gap: 10px;
@@ -554,6 +603,19 @@ textarea {
 .compact-admin-form .notice {
   grid-column: 1 / -1;
   margin: 0;
+}
+
+.admin-message-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+}
+
+.admin-message-form .wide-field {
+  grid-column: 1 / -1;
+}
+
+.admin-message-form button {
+  justify-self: start;
 }
 
 .form-actions {
@@ -710,9 +772,9 @@ textarea {
 
 .chart-detail-strip {
   display: grid;
-  grid-template-columns: minmax(280px, 500px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
   gap: 38px;
-  align-items: stretch;
+  align-items: start;
   max-width: min(1760px, calc(100vw - 120px));
   margin: 18px auto 0;
 }
@@ -749,12 +811,15 @@ textarea {
 }
 
 .chart-artwork {
+  justify-self: center;
+  width: min(100%, 360px);
+  max-height: 360px;
   overflow: hidden;
-  border: 1px solid rgb(23 32 51 / 10%);
-  border-radius: 8px;
+  border: 2px solid #172033;
+  border-radius: 10px;
   background: #1f1d1b;
   aspect-ratio: 1;
-  box-shadow: none;
+  box-shadow: 0 10px 24px rgb(23 32 51 / 12%);
 }
 
 .chart-artwork img {
@@ -830,13 +895,13 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 36px;
+  margin-top: 30px;
 }
 
 .level-button {
   display: inline-grid;
-  min-width: 156px;
-  min-height: 280px;
+  min-width: 128px;
+  min-height: 180px;
   gap: 3px;
   align-content: center;
   border: 1px solid #00a6c8;
@@ -848,6 +913,30 @@ textarea {
   text-align: left;
 }
 
+.level-button.level-master {
+  border-color: #8d5cf6;
+  background: #efe8ff;
+  color: #2e185f;
+}
+
+.level-button.level-master:hover,
+.level-button.level-master.is-active {
+  border-color: #7444df;
+  background: #e5d9ff;
+}
+
+.level-button.level-re-master {
+  border-color: #b7d9ff;
+  background: #f4fbff;
+  color: #244c73;
+}
+
+.level-button.level-re-master:hover,
+.level-button.level-re-master.is-active {
+  border-color: #8fc4ff;
+  background: #eaf6ff;
+}
+
 .level-button:hover,
 .level-button.is-active {
   border-color: var(--cyan);
@@ -855,7 +944,7 @@ textarea {
 }
 
 .level-button strong {
-  font-size: 48px;
+  font-size: 38px;
   line-height: 1;
 }
 
@@ -1237,7 +1326,8 @@ textarea {
   }
 
   .admin-action-grid,
-  .compact-admin-form {
+  .compact-admin-form,
+  .admin-message-form {
     grid-template-columns: 1fr;
   }
 
@@ -1273,7 +1363,7 @@ textarea {
   }
 
   .chart-artwork {
-    max-width: 220px;
+    max-width: 320px;
   }
 
   .comment-item.is-reply {
@@ -1299,7 +1389,7 @@ textarea {
   }
 
   .chart-artwork {
-    width: min(100%, 240px);
+    width: min(100%, 300px);
   }
 
   .song-info-body h2 {

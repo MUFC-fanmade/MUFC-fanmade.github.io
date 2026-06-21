@@ -6,7 +6,7 @@
     <title>MUFC Chart Contest</title>
     <link rel="icon" href="assets/cat.gif" />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-    <link rel="stylesheet" href="styles.css?v=20260621-detail-spacing" />
+    <link rel="stylesheet" href="styles.css?v=20260621-inbox" />
     <script src="config.js?v=20260530-chartpack"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
@@ -25,6 +25,7 @@
         <button class="ghost-button" data-route="guide">使用指南</button>
         <button class="ghost-button" data-route="submit">提交作品</button>
         <button class="ghost-button hidden" id="profileNav" data-route="profile">个人中心</button>
+        <button class="ghost-button hidden" id="inboxNav" data-route="inbox">站内信</button>
         <button class="ghost-button hidden" id="adminNav" data-route="admin">管理后台</button>
         <button class="primary-button" id="authToggle" data-route="auth">登录</button>
       </nav>
@@ -273,6 +274,32 @@
           <p class="notice" id="profileNotice"></p>
         </section>
 
+        <section class="content-view hidden" id="inboxView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Inbox</p>
+              <h2>站内信</h2>
+            </div>
+            <div class="section-actions">
+              <button class="secondary-button" id="refreshInbox" type="button">刷新</button>
+              <button class="primary-button" id="markAllInboxRead" type="button">全部已读</button>
+            </div>
+          </div>
+
+          <section class="profile-panel">
+            <div class="panel-heading compact-heading">
+              <h3>我的消息</h3>
+              <div class="inbox-counts">
+                <span class="score-pill">未读 <strong id="inboxUnreadCount">0</strong></span>
+                <span class="score-pill">全部 <strong id="inboxTotalCount">0</strong></span>
+              </div>
+            </div>
+            <div class="inbox-list" id="inboxList"></div>
+          </section>
+
+          <p class="notice" id="inboxNotice"></p>
+        </section>
+
         <section class="content-view hidden" id="detailView">
           <div class="detail-toolbar">
             <button class="link-button" data-route="home" type="button">返回首页</button>
@@ -315,6 +342,7 @@
             <button class="secondary-button" data-admin-tab="ratings" type="button">评分列表</button>
             <button class="secondary-button" data-admin-tab="comments" type="button">评论列表</button>
             <button class="secondary-button" data-admin-tab="invites" type="button">邀请码</button>
+            <button class="secondary-button" data-admin-tab="messages" type="button">站内信</button>
           </div>
 
           <section class="admin-panel" id="adminUsersPanel">
@@ -461,6 +489,40 @@
             </div>
           </section>
 
+          <section class="admin-panel hidden" id="adminMessagesPanel">
+            <div class="panel-heading compact-heading">
+              <h3>站内信</h3>
+              <span class="score-pill" id="adminMessageCount">0</span>
+            </div>
+
+            <form id="adminMessageForm" class="admin-action-form admin-message-form">
+              <label>
+                发送目标
+                <select id="adminMessageTarget" name="targetScope" required>
+                  <option value="all">全体成员</option>
+                  <option value="user">指定用户</option>
+                </select>
+              </label>
+              <label>
+                收信用户
+                <select id="adminMessageUserSelect" name="targetUserId"></select>
+              </label>
+              <label>
+                标题
+                <input name="title" maxlength="120" required />
+              </label>
+              <label class="wide-field">
+                正文
+                <textarea name="body" maxlength="2000" rows="5" required></textarea>
+              </label>
+              <button class="primary-button" type="submit">发送站内信</button>
+            </form>
+
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="adminMessagesTable"></table>
+            </div>
+          </section>
+
           <p class="notice" id="adminNotice"></p>
         </section>
       </section>
@@ -484,6 +546,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260621-detail-layout-target"></script>
+    <script src="app.js?v=20260621-inbox"></script>
   </body>
 </html>
