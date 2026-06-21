@@ -50,17 +50,42 @@
 
       <section class="workspace">
         <section class="content-view" id="homeView">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Gallery</p>
-              <h2>最近谱面</h2>
+          <section class="content-view" id="recentSection">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Gallery</p>
+                <h2>最近谱面</h2>
+                <p class="section-desc">发现最新上传的精彩谱面</p>
+              </div>
+              <div class="section-actions">
+                <button class="secondary-button" id="refreshGallery" type="button">刷新</button>
+                <button class="primary-button" data-route="charts" type="button">查看全部谱面</button>
+              </div>
             </div>
-            <div class="section-actions">
-              <button class="secondary-button" id="refreshGallery" type="button">刷新</button>
-              <button class="primary-button" data-route="charts" type="button">查看全部谱面</button>
+            <div class="gallery-grid" id="galleryGrid"></div>
+          </section>
+
+          <section class="content-view" id="popularSection">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Trending</p>
+                <h2>大伙爱看</h2>
+                <p class="section-desc">发现点赞数量最多的谱面</p>
+              </div>
             </div>
-          </div>
-          <div class="gallery-grid" id="galleryGrid"></div>
+            <div class="gallery-grid" id="popularGrid"></div>
+          </section>
+
+          <section class="content-view" id="recentCommentsSection">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Comments</p>
+                <h2>最新评论</h2>
+                <p class="section-desc">看看大家最近在讨论什么</p>
+              </div>
+            </div>
+            <div class="recent-comments-list" id="recentComments"></div>
+          </section>
         </section>
 
         <section class="content-view hidden" id="chartsView">
@@ -115,7 +140,7 @@
             <section class="guide-panel">
               <h3>浏览、评分与评论</h3>
               <ol class="guide-steps">
-                <li>首页只展示最近 5 个谱面。</li>
+                <li>首页只展示最近 8 个谱面。</li>
                 <li>进入“谱面列表”可以查看全部作品，并用关键词检索。</li>
                 <li>点击作品封面进入详情页，播放器会加载谱面预览。</li>
                 <li>登录后可以对作品评分，并在评论区使用 Markdown 发表评论。</li>
@@ -307,23 +332,23 @@
           <div class="preview-shell hidden" id="previewShell">
             <iframe id="majdataFrame" title="Majdata chart preview" allow="autoplay; fullscreen"></iframe>
           </div>
-          <div class="chart-detail-strip">
-            <div class="chart-artwork" id="chartArtwork"></div>
-            <section class="chart-main-panel">
-              <section class="chart-level-panel hidden" id="chartLevelPanel">
-                <div class="panel-heading compact-heading">
-                  <h3>谱面详情</h3>
-                  <span class="score-pill" id="chartLevelCount">0</span>
+          <div class="detail-top-row">
+            <div class="chart-detail-strip">
+              <div class="chart-left-col">
+                <div class="chart-artwork" id="chartArtwork"></div>
+                <section class="chart-level-panel hidden" id="chartLevelPanel">
+                  <div class="level-button-row" id="chartLevelButtons"></div>
+                  <p class="notice" id="chartLevelNotice"></p>
+                </section>
+                <div class="chart-level-panel hidden" id="chartLevelFallback">
+                  <p class="notice" id="chartLevelFallbackText"></p>
                 </div>
-                <div class="level-button-row" id="chartLevelButtons"></div>
-                <p class="notice" id="chartLevelNotice"></p>
-              </section>
-              <div class="chart-level-panel hidden" id="chartLevelFallback">
-                <p class="notice" id="chartLevelFallbackText"></p>
               </div>
               <div class="song-info-body" id="songInfoBody"></div>
-            </section>
+            </div>
+            <div class="detail-rating-card" id="detailRatingCard"></div>
           </div>
+          <div class="chart-description" id="chartDescription"></div>
           <article class="detail" id="detailContent"></article>
         </section>
 
@@ -547,7 +572,10 @@
           <img alt="" />
         </button>
         <div class="card-body">
-          <h3></h3>
+          <div class="card-title-row">
+            <span class="card-number"></span>
+            <h3></h3>
+          </div>
           <p></p>
           <div class="score-row">
             <span class="score-pill"></span>

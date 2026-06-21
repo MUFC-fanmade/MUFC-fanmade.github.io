@@ -112,3 +112,18 @@ For GitHub Pages, publish from the repository root. Commit `index.html`, `styles
 - Expanded the admin dashboard with submission management, rating cancellation, invite-code creation, and chart file upload/replacement/deletion tools.
 - Added internal profile numbers (`user001`, `user002`, ...) so admin tables do not expose Auth UUIDs as user-facing IDs.
 - Added `admin-update-password`, an admin-only Edge Function for changing account passwords without exposing service-role credentials to the frontend.
+
+### 2026-06-21
+
+- Redesigned detail page layout: chart artwork + difficulty selection on the left, song info on the right, rating in a separate card, charter's note section below.
+- Difficulty selection only shows MASTER and RE:MASTER as horizontal bars, displayed below the artwork without a heading label.
+- Rating card shows the user's own score with a color pill (blue-to-red gradient from 1 to 10); quick-rating boxes (1-10) allow one-click scoring, with a detailed input+submit form retained below.
+- Non-admin users see "Rated" / "Not rated" in comments instead of specific scores; only admin users can see all rating data.
+- Homepage restructured into three sections: "Recent Charts" (most recent 8 in a horizontal scroll row), "Trending" (top 8 by likes), and "Latest Comments" (latest 5 showing chart name, clickable to jump to detail).
+- Each section has an eyebrow, h2 heading, and a muted description line below the title.
+- Gallery cards show chart number and title on the same line, artist and charter on separate lines with auto-scrolling marquee when text overflows.
+- Card layout uses `auto-fill` grid; charts list page adds pagination (20 per page).
+- Cards have hover effects: lift (-2px), shadow, and accent border; rating buttons removed globally.
+- Like and dislike pills in cards now have green/red color distinction.
+- Preview width and all detail content max-widths unified to 70vw.
+- Marquee text animations pause briefly at the start before scrolling.
