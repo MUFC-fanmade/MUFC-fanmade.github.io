@@ -25,7 +25,10 @@
         <button class="ghost-button" data-route="guide">使用指南</button>
         <button class="ghost-button" data-route="submit">提交作品</button>
         <button class="ghost-button hidden" id="profileNav" data-route="profile">个人中心</button>
-        <button class="ghost-button hidden" id="inboxNav" data-route="inbox">站内信</button>
+        <button class="ghost-button inbox-nav-button hidden" id="inboxNav" data-route="inbox">
+          <span>站内信</span>
+          <span class="nav-unread-badge hidden" id="inboxNavUnreadCount" aria-label="未读消息">0</span>
+        </button>
         <button class="ghost-button hidden" id="adminNav" data-route="admin">管理后台</button>
         <button class="primary-button" id="authToggle" data-route="auth">登录</button>
       </nav>
@@ -596,6 +599,6 @@
       </article>
     </template>
 
-    <script src="app.js?v=20260621-submission-limit"></script>
+    <script src="app.js?v=20260621-inbox-badge"></script>
   </body>
 </html>

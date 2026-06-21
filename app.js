@@ -101,6 +101,7 @@ const els = {
   authToggle: document.querySelector("#authToggle"),
   profileNav: document.querySelector("#profileNav"),
   inboxNav: document.querySelector("#inboxNav"),
+  inboxNavUnreadCount: document.querySelector("#inboxNavUnreadCount"),
   adminNav: document.querySelector("#adminNav"),
   sessionLabel: document.querySelector("#sessionLabel"),
   loginForm: document.querySelector("#loginForm"),
@@ -296,6 +297,16 @@ function updateSessionUi() {
   els.profileNav.classList.toggle("hidden", !user);
   els.inboxNav?.classList.toggle("hidden", !user);
   els.adminNav.classList.toggle("hidden", !user || !state.profile?.is_admin);
+  if (!user) {
+    updateInboxBadge(0);
+  }
+}
+
+function updateInboxBadge(unreadCount = 0) {
+  if (!els.inboxNavUnreadCount) return;
+  const count = Number(unreadCount || 0);
+  els.inboxNavUnreadCount.textContent = count > 99 ? "99+" : String(count);
+  els.inboxNavUnreadCount.classList.toggle("hidden", count <= 0);
 }
 
 function setAuthMode(mode) {
@@ -887,6 +898,7 @@ function renderInbox() {
 
   const messages = state.inboxMessages || [];
   const unreadCount = messages.filter((message) => !message.read_at).length;
+  updateInboxBadge(unreadCount);
   if (els.inboxUnreadCount) els.inboxUnreadCount.textContent = String(unreadCount);
   if (els.inboxTotalCount) els.inboxTotalCount.textContent = String(messages.length);
   if (els.markAllInboxRead) els.markAllInboxRead.disabled = unreadCount === 0;
@@ -942,25 +954,25 @@ function renderInbox() {
   });
 }
 
-async function loadInbox() {
+async function loadInbox({ silent = false } = {}) {
   if (!client || !state.session) {
     state.inboxMessages = [];
     renderInbox();
     return;
   }
 
-  setNotice(els.inboxNotice, "加载中...");
+  if (!silent) setNotice(els.inboxNotice, "加载中...");
   const { data, error } = await client.rpc("inbox_rows");
   if (error) {
     state.inboxMessages = [];
     renderInbox();
-    setNotice(els.inboxNotice, error.message, true);
+    if (!silent) setNotice(els.inboxNotice, error.message, true);
     return;
   }
 
   state.inboxMessages = data || [];
   renderInbox();
-  setNotice(els.inboxNotice, "");
+  if (!silent) setNotice(els.inboxNotice, "");
 }
 
 async function markInboxMessageRead(messageId) {
@@ -2939,6 +2951,9 @@ async function initSession() {
     await loadCurrentProfile();
   }
   updateSessionUi();
+  if (state.session) {
+    await loadInbox({ silent: true });
+  }
 
   client.auth.onAuthStateChange(async (_event, session) => {
     state.session = session;
@@ -2946,6 +2961,9 @@ async function initSession() {
       await loadCurrentProfile();
     }
     updateSessionUi();
+    if (session) {
+      await loadInbox({ silent: true });
+    }
     if (!session) {
       state.ownSubmissions = [];
       state.ownRatings = [];
@@ -2957,6 +2975,7 @@ async function initSession() {
       state.adminInvites = [];
       state.adminMessages = [];
       state.inboxMessages = [];
+      renderInbox();
       updateSessionUi();
     }
   });
