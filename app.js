@@ -681,9 +681,21 @@ function parseMajdataLevels(text) {
 }
 
 async function loadMajdataLevels(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`maidata ${response.status}`);
-  return parseMajdataLevels(await response.text());
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!response.ok) throw new Error(`maidata ${response.status}`);
+    return parseMajdataLevels(await response.text());
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("maidata request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function renderProfileList(container, items, emptyText, renderer) {
@@ -1908,6 +1920,36 @@ function switchChartLevel(maidataLevel) {
   els.majdataFrame.src = buildPlayerUrl(item, maidataLevel);
 }
 
+async function loadDetailChartLevels(item) {
+  if (!item) return;
+
+  try {
+    const levels = await loadMajdataLevels(item.maidata_url);
+    if (state.activeSubmission?.id !== item.id) return;
+
+    state.activeChartLevels = levels;
+    const current = levels.find((level) => level.maidataLevel === state.activeChartLevel && (level.index === 5 || level.index === 6));
+    const fallback =
+      levels.find((level) => level.maidataLevel === "lv_5") ||
+      levels.find((level) => level.index === 6) ||
+      null;
+
+    state.activeChartLevel = (current || fallback)?.maidataLevel || state.activeChartLevel;
+    renderChartLevelPanel();
+
+    if (!current && fallback) {
+      els.majdataFrame.src = buildPlayerUrl(item, state.activeChartLevel);
+    }
+  } catch (error) {
+    if (state.activeSubmission?.id !== item.id) return;
+    els.chartLevelPanel.classList.remove("hidden");
+    els.chartLevelFallback.classList.add("hidden");
+    els.chartLevelButtons.innerHTML = "";
+    els.chartLevelNotice.textContent = `Failed to load chart levels: ${error.message || error}`;
+    els.chartLevelNotice.classList.remove("hidden");
+  }
+}
+
 async function openDetail(id) {
   const item = state.submissions.find((entry) => entry.id === id);
   if (!item) return;
@@ -1927,6 +1969,7 @@ async function openDetail(id) {
   els.chartLevelNotice.classList.toggle("hidden", !hasPreviewFiles);
   els.majdataFrame.src = hasPreviewFiles ? buildPlayerUrl(item, state.activeChartLevel) : "";
   els.chartArtwork.innerHTML = `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" />`;
+  const chartLevelsPromise = hasPreviewFiles ? loadDetailChartLevels(item) : Promise.resolve();
   if (els.songInfoBody) {
     els.songInfoBody.innerHTML = `
       <div class="info-pills">
@@ -1965,6 +2008,7 @@ async function openDetail(id) {
       .eq("submission_id", item.id)
       .eq("user_id", state.session.user.id)
       .limit(1);
+    if (state.activeSubmission?.id !== item.id) return;
     if (ratingData?.[0]?.score) userScore = Number(ratingData[0].score);
   }
   const hasUserScore = userScore > 0;
@@ -2032,36 +2076,7 @@ async function openDetail(id) {
   updateReplyContext();
   showView("detail");
   window.location.hash = `detail=${encodeURIComponent(item.id)}`;
-  await loadCurrentVote();
-  await loadComments();
-
-  if (!hasPreviewFiles) return;
-
-  try {
-    const levels = await loadMajdataLevels(item.maidata_url);
-    if (state.activeSubmission?.id !== item.id) return;
-
-    state.activeChartLevels = levels;
-    const current = levels.find((level) => level.maidataLevel === state.activeChartLevel && (level.index === 5 || level.index === 6));
-    const fallback =
-      levels.find((level) => level.maidataLevel === "lv_5") ||
-      levels.find((level) => level.index === 6) ||
-      null;
-
-    state.activeChartLevel = (current || fallback)?.maidataLevel || state.activeChartLevel;
-    renderChartLevelPanel();
-
-    if (!current && fallback) {
-      els.majdataFrame.src = buildPlayerUrl(item, state.activeChartLevel);
-    }
-  } catch (error) {
-    if (state.activeSubmission?.id !== item.id) return;
-    els.chartLevelPanel.classList.remove("hidden");
-    els.chartLevelFallback.classList.add("hidden");
-    els.chartLevelButtons.innerHTML = "";
-    els.chartLevelNotice.textContent = `Failed to load chart levels: ${error.message || error}`;
-    els.chartLevelNotice.classList.remove("hidden");
-  }
+  await Promise.allSettled([loadCurrentVote(), loadComments(), chartLevelsPromise]);
 }
 
 function updateReactionUi(item = state.activeSubmission, voteValue = state.activeVoteValue) {
