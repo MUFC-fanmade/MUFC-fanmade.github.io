@@ -239,8 +239,19 @@ function normalizeQqNumber(value) {
   return qqNumber;
 }
 
+const QQ_AUTH_DOMAIN = "qq.mufc.local";
+
+function authEmailFromQqNumber(value) {
+  return `${normalizeQqNumber(value)}@${QQ_AUTH_DOMAIN}`;
+}
+
 function formatAccountIdentifier(value) {
-  return String(value || "").trim();
+  const account = String(value || "").trim();
+  const suffix = `@${QQ_AUTH_DOMAIN}`;
+  if (account.toLowerCase().endsWith(suffix)) {
+    return account.slice(0, -suffix.length);
+  }
+  return account;
 }
 
 function formatScore(item) {
@@ -304,7 +315,7 @@ function renderAvatar(container, profile, fallbackName) {
 
 function updateSessionUi() {
   const user = state.session?.user;
-  els.sessionLabel.textContent = user ? formatAccountIdentifier(user.phone) : "未登录";
+  els.sessionLabel.textContent = user ? formatAccountIdentifier(user.email) : "未登录";
   els.authToggle.textContent = user ? "退出" : "登录";
   els.profileNav.classList.toggle("hidden", !user);
   els.inboxNav?.classList.toggle("hidden", !user);
@@ -854,15 +865,15 @@ async function loadProfile() {
 }
 
 function renderProfile() {
-  const fallbackName = formatAccountIdentifier(state.session?.phone) || "MUFC";
+  const fallbackName = formatAccountIdentifier(state.session?.email) || "MUFC";
   const displayName = state.profile?.display_name || fallbackName;
 
   renderAvatar(els.profileAvatar, state.profile, displayName);
   els.profileDisplayName.textContent = displayName;
-  els.profileEmail.textContent = state.session?.phone || "演示模式";
+  els.profileEmail.textContent = state.session?.email || "演示模式";
   els.profileForm.elements.displayName.value = state.profile?.display_name || "";
   if (state.session) {
-    els.profileEmail.textContent = `QQ ${formatAccountIdentifier(state.session.phone)}`;
+    els.profileEmail.textContent = `QQ ${formatAccountIdentifier(state.session.email)}`;
   }
   els.profileForm.elements.avatar.value = "";
 
@@ -1068,7 +1079,7 @@ function renderAdminTable(table, columns, rows, emptyText) {
 }
 
 function formatUserLabel(user) {
-  return [user?.user_code, user?.display_name, user?.phone || user?.email || user?.user_email].filter(Boolean).join(" / ") || "未命名用户";
+  return [user?.user_code, user?.display_name, formatAccountIdentifier(user?.phone || user?.email || user?.user_email)].filter(Boolean).join(" / ") || "未命名用户";
 }
 
 function storagePathFromPublicUrl(url) {
@@ -1199,7 +1210,7 @@ function renderAdminData() {
     els.adminUsersTable,
     [
       { label: "内部编号", key: "user_code" },
-      { label: "QQ 号", key: "email" },
+      { label: "QQ 号", render: (row) => formatAccountIdentifier(row.email) },
       { label: "显示名", key: "display_name" },
       { label: "管理员", render: (row) => (row.is_admin ? "是" : "否") },
       { label: "作品", key: "submission_count" },
@@ -1247,7 +1258,7 @@ function renderAdminData() {
       { label: "谱面 ID", key: "submission_id" },
       { label: "评分人编号", key: "user_code" },
       { label: "作品", key: "submission_title" },
-      { label: "QQ 号", key: "user_email" },
+      { label: "QQ 号", render: (row) => formatAccountIdentifier(row.user_email) },
       { label: "评分人", key: "display_name" },
       { label: "分数", render: (row) => Number(row.score || 0).toFixed(1) },
       { label: "更新时间", render: (row) => formatDateTime(row.updated_at) },
@@ -1266,7 +1277,7 @@ function renderAdminData() {
     [
       { label: "作品", key: "submission_title" },
       { label: "评论人编号", key: "user_code" },
-      { label: "QQ 号", key: "user_email" },
+      { label: "QQ 号", render: (row) => formatAccountIdentifier(row.user_email) },
       { label: "评论人", key: "display_name" },
       { label: "评论 Markdown", key: "body" },
       { label: "发表时间", render: (row) => formatDateTime(row.created_at) },
@@ -1282,7 +1293,7 @@ function renderAdminData() {
       { label: "备注", key: "note" },
       { label: "使用者编号", render: (row) => row.used_user_code || "-" },
       { label: "使用者", render: (row) => row.used_display_name || "-" },
-      { label: "使用者 QQ 号", render: (row) => row.used_email || "-" },
+      { label: "使用者 QQ 号", render: (row) => formatAccountIdentifier(row.used_email) || "-" },
       { label: "使用时间", render: (row) => formatDateTime(row.used_at) || "-" },
       { label: "过期时间", render: (row) => formatDateTime(row.expires_at) || "-" },
       { label: "创建时间", render: (row) => formatDateTime(row.created_at) },
@@ -2767,9 +2778,9 @@ async function handleLogin(event) {
   setFormBusy(formElement, true, "登录中...");
   const form = new FormData(formElement);
   try {
-    const qqNumber = normalizeQqNumber(form.get("qqNumber"));
+    const email = authEmailFromQqNumber(form.get("qqNumber"));
     const { error } = await client.auth.signInWithPassword({
-      phone: qqNumber,
+      email,
       password: form.get("password"),
     });
 

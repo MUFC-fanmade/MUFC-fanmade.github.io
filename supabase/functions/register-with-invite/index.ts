@@ -21,6 +21,8 @@ function normalizeQqNumber(value: unknown) {
   return qqNumber;
 }
 
+const QQ_AUTH_DOMAIN = "qq.mufc.local";
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -46,22 +48,23 @@ Deno.serve(async (request) => {
     return json({ error: "QQ number, password, displayName, and inviteCode are required" }, 400);
   }
 
-  let phone = "";
+  let normalizedQq = "";
   try {
-    phone = normalizeQqNumber(qqNumber);
+    normalizedQq = normalizeQqNumber(qqNumber);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "A valid QQ number is required" }, 400);
   }
+  const email = `${normalizedQq}@${QQ_AUTH_DOMAIN}`;
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
   const created = await admin.auth.admin.createUser({
-    phone,
+    email,
     password,
-    phone_confirm: true,
-    user_metadata: { display_name: displayName, qq_number: phone },
+    email_confirm: true,
+    user_metadata: { display_name: displayName, qq_number: normalizedQq },
   });
 
   if (created.error || !created.data.user) {

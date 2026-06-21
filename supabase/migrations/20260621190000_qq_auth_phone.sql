@@ -27,7 +27,7 @@ begin
   select
     p.id,
     p.user_code,
-    u.phone::text,
+    u.email::text,
     p.display_name,
     p.avatar_url,
     p.is_admin,
@@ -41,7 +41,7 @@ begin
   left join public.submissions s on s.user_id = p.id
   left join public.ratings r on r.user_id = p.id
   left join public.comments c on c.user_id = p.id
-  group by p.id, u.phone, u.last_sign_in_at
+  group by p.id, u.email, u.last_sign_in_at
   order by p.created_at desc;
 end;
 $$;
@@ -82,7 +82,7 @@ begin
     s.id,
     s.user_id,
     p.user_code,
-    u.phone::text as user_email,
+    u.email::text as user_email,
     p.display_name,
     s.title,
     s.description,
@@ -100,7 +100,7 @@ begin
   join public.profiles p on p.id = s.user_id
   left join auth.users u on u.id = s.user_id
   left join public.ratings r on r.submission_id = s.id
-  group by s.id, u.phone, p.user_code, p.display_name
+  group by s.id, u.email, p.user_code, p.display_name
   order by s.created_at desc;
 end;
 $$;
@@ -136,7 +136,7 @@ begin
     s.title as submission_title,
     r.user_id,
     p.user_code,
-    u.phone::text as user_email,
+    u.email::text as user_email,
     p.display_name,
     r.score,
     r.created_at,
@@ -180,7 +180,7 @@ begin
     s.title as submission_title,
     c.user_id,
     p.user_code,
-    u.phone::text as user_email,
+    u.email::text as user_email,
     p.display_name,
     c.body,
     c.created_at,
@@ -223,7 +223,7 @@ begin
     i.used_by,
     p.user_code as used_user_code,
     p.display_name as used_display_name,
-    u.phone::text as used_email,
+    u.email::text as used_email,
     i.used_at,
     i.expires_at,
     i.created_at
@@ -263,7 +263,7 @@ begin
     m.target_scope,
     m.target_user_id,
     p.user_code,
-    u.phone::text as user_email,
+    u.email::text as user_email,
     p.display_name,
     m.title,
     m.body,
