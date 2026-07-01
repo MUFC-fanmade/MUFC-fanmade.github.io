@@ -16,7 +16,7 @@
   <body>
     <header class="topbar">
       <a class="brand" href="#home" aria-label="MUFC Chart Contest home">
-        <img class="crest" src="assets/cat.gif" alt="" />
+        <img class="crest" id="catEasterIcon" src="assets/cat.gif" alt="" />
         <span>MUFC Chart Contest</span>
       </a>
       <nav class="nav-actions">
@@ -35,6 +35,18 @@
     </header>
 
     <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+    <div class="easter-modal hidden" id="catEasterModal" role="dialog" aria-modal="true" aria-labelledby="catEasterTitle">
+      <div class="easter-card">
+        <h2 id="catEasterTitle">喵喵喵</h2>
+        <p id="catEasterBody">你听到了会场角落传来的声音。</p>
+        <div class="easter-code hidden" id="catEasterCode">MUFC3COMMINGSOON</div>
+        <div class="easter-actions">
+          <button class="secondary-button" id="catEasterCancel" type="button">取消</button>
+          <button class="primary-button" id="catEasterConfirm" type="button">确认</button>
+          <button class="primary-button hidden" id="catEasterClose" type="button">关闭</button>
+        </div>
+      </div>
+    </div>
 
     <main>
       <section class="hero">

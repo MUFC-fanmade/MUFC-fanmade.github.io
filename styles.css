@@ -303,6 +303,62 @@ textarea {
   padding: 24px;
 }
 
+.crest {
+  user-select: none;
+}
+
+.easter-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(23 32 51 / 36%);
+  backdrop-filter: blur(8px);
+}
+
+.easter-card {
+  display: grid;
+  gap: 14px;
+  width: min(420px, 100%);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.easter-card h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.easter-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.easter-code {
+  padding: 14px;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  background: rgb(240 77 136 / 9%);
+  color: var(--accent-dark);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 18px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.easter-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .toast-stack {
   position: fixed;
   top: 86px;
