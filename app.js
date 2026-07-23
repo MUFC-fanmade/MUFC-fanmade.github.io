@@ -68,8 +68,6 @@ const demoComments = [
 ];
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
-const CAT_EASTER_INVITE = "MUFC3COMMINGSOON";
-const CAT_EASTER_WINDOW_MS = 1400;
 
 const state = {
   session: null,
@@ -97,11 +95,6 @@ const state = {
   activeChartLevels: [],
   activeChartLevel: null,
   authMode: "login",
-  catEaster: {
-    stage: "idle",
-    initialClicks: [],
-    revealClicks: [],
-  },
 };
 
 const els = {
@@ -116,13 +109,6 @@ const els = {
   switchAuth: document.querySelector("#switchAuth"),
   authNotice: document.querySelector("#authNotice"),
   toastStack: document.querySelector("#toastStack"),
-  catEasterIcon: document.querySelector("#catEasterIcon"),
-  catEasterModal: document.querySelector("#catEasterModal"),
-  catEasterBody: document.querySelector("#catEasterBody"),
-  catEasterCode: document.querySelector("#catEasterCode"),
-  catEasterCancel: document.querySelector("#catEasterCancel"),
-  catEasterConfirm: document.querySelector("#catEasterConfirm"),
-  catEasterClose: document.querySelector("#catEasterClose"),
   homeView: document.querySelector("#homeView"),
   chartsView: document.querySelector("#chartsView"),
   guideView: document.querySelector("#guideView"),
@@ -212,72 +198,6 @@ const els = {
   cardTemplate: document.querySelector("#submissionCardTemplate"),
 };
 
-function pruneRecentClicks(clicks, now) {
-  return clicks.filter((time) => now - time <= CAT_EASTER_WINDOW_MS);
-}
-
-function openCatEasterPrompt() {
-  if (!els.catEasterModal) return;
-  state.catEaster.stage = "prompt";
-  state.catEaster.revealClicks = [];
-  els.catEasterBody.textContent = "你听到了会场角落传来的声音。";
-  els.catEasterCode.textContent = CAT_EASTER_INVITE;
-  els.catEasterCode.classList.add("hidden");
-  els.catEasterCancel.classList.remove("hidden");
-  els.catEasterConfirm.classList.remove("hidden");
-  els.catEasterClose.classList.add("hidden");
-  els.catEasterModal.classList.remove("hidden");
-}
-
-function closeCatEasterModal(resetStage = true) {
-  if (!els.catEasterModal) return;
-  els.catEasterModal.classList.add("hidden");
-  if (resetStage) {
-    state.catEaster.stage = "idle";
-    state.catEaster.initialClicks = [];
-    state.catEaster.revealClicks = [];
-  }
-}
-
-function confirmCatEasterPrompt() {
-  state.catEaster.stage = "armed";
-  state.catEaster.initialClicks = [];
-  state.catEaster.revealClicks = [];
-  closeCatEasterModal(false);
-  showToast("继续点击左上角的猫猫图标。", "success");
-}
-
-function revealCatEasterInvite() {
-  if (!els.catEasterModal) return;
-  state.catEaster.stage = "revealed";
-  els.catEasterBody.textContent = "隐藏邀请码已出现。";
-  els.catEasterCode.textContent = CAT_EASTER_INVITE;
-  els.catEasterCode.classList.remove("hidden");
-  els.catEasterCancel.classList.add("hidden");
-  els.catEasterConfirm.classList.add("hidden");
-  els.catEasterClose.classList.remove("hidden");
-  els.catEasterModal.classList.remove("hidden");
-}
-
-function handleCatEasterClick(event) {
-  event.preventDefault();
-  const now = Date.now();
-
-  if (state.catEaster.stage === "armed") {
-    state.catEaster.revealClicks = pruneRecentClicks([...state.catEaster.revealClicks, now], now);
-    if (state.catEaster.revealClicks.length >= 5) {
-      revealCatEasterInvite();
-    }
-    return;
-  }
-
-  if (state.catEaster.stage === "prompt" || state.catEaster.stage === "revealed") return;
-
-  state.catEaster.initialClicks = pruneRecentClicks([...state.catEaster.initialClicks, now], now);
-  if (state.catEaster.initialClicks.length >= 3) {
-    openCatEasterPrompt();
-  }
-}
 function showToast(message, type = "error") {
   if (!message || !els.toastStack) return;
 
@@ -3095,15 +3015,6 @@ document.querySelectorAll("[data-route]").forEach((button) => {
   button.addEventListener("click", () => showView(button.dataset.route));
 });
 
-els.catEasterIcon?.addEventListener("click", handleCatEasterClick);
-els.catEasterCancel?.addEventListener("click", () => closeCatEasterModal(true));
-els.catEasterConfirm?.addEventListener("click", confirmCatEasterPrompt);
-els.catEasterClose?.addEventListener("click", () => closeCatEasterModal(true));
-els.catEasterModal?.addEventListener("click", (event) => {
-  if (event.target === els.catEasterModal) {
-    closeCatEasterModal(state.catEaster.stage !== "armed");
-  }
-});
 els.switchAuth.addEventListener("click", () => {
   setAuthMode(state.authMode === "login" ? "register" : "login");
 });
