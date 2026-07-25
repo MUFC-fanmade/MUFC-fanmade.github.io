@@ -340,7 +340,20 @@ function setAuthMode(mode) {
   setNotice(els.authNotice, hasSupabaseConfig ? "" : "当前是演示模式：复制 config.example.js 为 config.js 并填写 Supabase 配置后接入真实后端。");
 }
 
+function stopMajdataPreview() {
+  // Use a DOM query instead of the const `els`/`state`: showView can run
+  // during early startup while those are still in their temporal dead zone.
+  // Unloading the iframe tears down the Unity instance so its audio stops.
+  const frame = document.querySelector("#majdataFrame");
+  if (frame && frame.src && frame.src !== "about:blank") {
+    frame.src = "about:blank";
+  }
+}
+
 function showView(name) {
+  if (name !== "detail") {
+    stopMajdataPreview();
+  }
   if (name === "profile" && !state.session) {
     setNotice(els.authNotice, "请先登录再查看个人中心。", true);
     setAuthMode("login");
@@ -2009,6 +2022,9 @@ async function openDetail(id) {
   els.chartLevelButtons.innerHTML = "";
   els.chartLevelNotice.textContent = hasPreviewFiles ? "Loading chart levels..." : "";
   els.chartLevelNotice.classList.toggle("hidden", !hasPreviewFiles);
+  showView("detail");
+  // Reveal the detail view first so the player iframe has real dimensions when
+  // Unity boots; otherwise the canvas can latch onto a 0x0 / wrong aspect size.
   els.majdataFrame.src = hasPreviewFiles ? buildPlayerUrl(item, state.activeChartLevel) : "";
   els.chartArtwork.innerHTML = `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" />`;
   const chartLevelsPromise = hasPreviewFiles ? loadDetailChartLevels(item) : Promise.resolve();

@@ -903,8 +903,11 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #050509;
-  aspect-ratio: 16 / 9;
-  max-width: 70vw;
+  /* Majdata's playfield is square; keep the shell square. A 16:9 box forced
+     the game into a wrong aspect ratio (stretched / clipped majview). */
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: min(620px, 92vw);
   margin: 0 auto;
 }
 
@@ -1434,6 +1437,8 @@ textarea {
   align-items: baseline;
   gap: 8px;
   font-size: 14px;
+  /* Let long unbroken comment text shrink instead of overflowing the card. */
+  min-width: 0;
 }
 
 .recent-comment-item strong {
@@ -1447,6 +1452,9 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Flex item must be allowed to shrink below its content width. */
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .chart-pager {
