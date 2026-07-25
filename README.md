@@ -127,3 +127,9 @@ For GitHub Pages, publish from the repository root. Commit `index.html`, `styles
 - Like and dislike pills in cards now have green/red color distinction.
 - Preview width and all detail content max-widths unified to 70vw.
 - Marquee text animations pause briefly at the start before scrolling.
+
+### 2026-07-23
+
+- Removed the hidden cat easter egg and its invite-code reveal flow from the frontend.
+- Added comment deletion to the admin dashboard comment list, including nested replies.
+- Added admin channel switches for regular-user submissions and ratings; closing a channel blocks regular users at both the UI and database policy level while admins remain unrestricted.

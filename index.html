@@ -426,6 +426,19 @@
               <p class="notice" id="adminSubmissionLimitStatus"></p>
             </form>
 
+            <form id="adminChannelForm" class="admin-action-form submission-limit-form">
+              <label class="toggle-field">
+                <input id="adminSubmissionChannelEnabled" name="submissionEnabled" type="checkbox" />
+                <span>开放普通用户提交通道</span>
+              </label>
+              <label class="toggle-field">
+                <input id="adminRatingChannelEnabled" name="ratingEnabled" type="checkbox" />
+                <span>开放普通用户评分通道</span>
+              </label>
+              <button class="primary-button" type="submit">保存通道设置</button>
+              <p class="notice" id="adminChannelStatus"></p>
+            </form>
+
             <div class="admin-action-grid">
               <form id="adminSubmissionForm" class="admin-action-form">
                 <h4>后台上传谱面</h4>

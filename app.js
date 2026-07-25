@@ -86,6 +86,10 @@ const state = {
     enabled: true,
     maxCount: 1,
   },
+  adminChannelSettings: {
+    submissionEnabled: true,
+    ratingEnabled: true,
+  },
   adminTab: "users",
   chartQuery: "",
   chartPage: 0,
@@ -165,6 +169,10 @@ const els = {
   adminSubmissionLimitEnabled: document.querySelector("#adminSubmissionLimitEnabled"),
   adminSubmissionLimitMax: document.querySelector("#adminSubmissionLimitMax"),
   adminSubmissionLimitStatus: document.querySelector("#adminSubmissionLimitStatus"),
+  adminChannelForm: document.querySelector("#adminChannelForm"),
+  adminSubmissionChannelEnabled: document.querySelector("#adminSubmissionChannelEnabled"),
+  adminRatingChannelEnabled: document.querySelector("#adminRatingChannelEnabled"),
+  adminChannelStatus: document.querySelector("#adminChannelStatus"),
   adminSubmitterSelect: document.querySelector("#adminSubmitterSelect"),
   adminFileForm: document.querySelector("#adminFileForm"),
   adminFileSubmissionSelect: document.querySelector("#adminFileSubmissionSelect"),
@@ -1208,6 +1216,22 @@ function renderAdminSubmissionLimit() {
   }
 }
 
+function renderAdminChannelSettings() {
+  if (!els.adminChannelForm) return;
+
+  const submissionEnabled = state.adminChannelSettings?.submissionEnabled !== false;
+  const ratingEnabled = state.adminChannelSettings?.ratingEnabled !== false;
+  if (els.adminSubmissionChannelEnabled) {
+    els.adminSubmissionChannelEnabled.checked = submissionEnabled;
+  }
+  if (els.adminRatingChannelEnabled) {
+    els.adminRatingChannelEnabled.checked = ratingEnabled;
+  }
+  if (els.adminChannelStatus) {
+    els.adminChannelStatus.textContent = `当前${submissionEnabled ? "提交通道开放中" : "提交通道已关闭"}，${ratingEnabled ? "评分通道开放中" : "评分通道已关闭"}。`;
+  }
+}
+
 function renderAdminData() {
   els.adminUserCount.textContent = String(state.adminUsers.length);
   els.adminSubmissionCount.textContent = String(state.adminSubmissions.length);
@@ -1218,6 +1242,7 @@ function renderAdminData() {
   syncAdminSelects();
   updateAdminMessageTargetUi();
   renderAdminSubmissionLimit();
+  renderAdminChannelSettings();
 
   renderAdminTable(
     els.adminUsersTable,
@@ -1294,6 +1319,11 @@ function renderAdminData() {
       { label: "评论人", key: "display_name" },
       { label: "评论 Markdown", key: "body" },
       { label: "发表时间", render: (row) => formatDateTime(row.created_at) },
+      {
+        label: "操作",
+        html: true,
+        render: (row) => `<button class="danger-button" data-admin-delete-comment="${escapeHtml(row.id)}" type="button">删除评论</button>`,
+      },
     ],
     state.adminComments,
     "没有评论数据。"
@@ -1348,7 +1378,7 @@ async function loadAdminData() {
   }
 
   setNotice(els.adminNotice, "加载中...");
-  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult, messagesResult, limitResult] = await Promise.all([
+  const [usersResult, submissionsResult, ratingsResult, commentsResult, invitesResult, messagesResult, limitResult, channelResult] = await Promise.all([
     client.rpc("admin_user_rows"),
     client.rpc("admin_submission_rows"),
     client.rpc("admin_rating_rows"),
@@ -1356,6 +1386,7 @@ async function loadAdminData() {
     client.rpc("admin_invite_rows"),
     client.rpc("admin_message_rows"),
     client.rpc("admin_submission_limit_settings"),
+    client.rpc("admin_channel_settings"),
   ]);
 
   const error =
@@ -1365,7 +1396,8 @@ async function loadAdminData() {
     commentsResult.error ||
     invitesResult.error ||
     messagesResult.error ||
-    limitResult.error;
+    limitResult.error ||
+    channelResult.error;
   if (error) {
     setNotice(els.adminNotice, error.message, true);
     state.adminUsers = [];
@@ -1374,6 +1406,7 @@ async function loadAdminData() {
     state.adminComments = [];
     state.adminInvites = [];
     state.adminMessages = [];
+    state.adminChannelSettings = { submissionEnabled: true, ratingEnabled: true };
     renderAdminData();
     return;
   }
@@ -1388,6 +1421,11 @@ async function loadAdminData() {
   state.adminSubmissionLimit = {
     enabled: Boolean(limitSettings?.limit_enabled),
     maxCount: Number(limitSettings?.max_submissions || 1),
+  };
+  const channelSettings = Array.isArray(channelResult.data) ? channelResult.data[0] : channelResult.data;
+  state.adminChannelSettings = {
+    submissionEnabled: channelSettings?.submission_enabled !== false,
+    ratingEnabled: channelSettings?.rating_enabled !== false,
   };
   renderAdminData();
   setAdminTab(state.adminTab);
@@ -1435,6 +1473,25 @@ async function deleteAdminSubmission(submissionId) {
   setNotice(els.adminNotice, "谱面已删除。");
 }
 
+async function deleteAdminComment(commentId) {
+  if (!client || !commentId) return;
+  if (!window.confirm("确定要删除这条评论吗？它的所有回复也会一并删除。")) return;
+
+  setNotice(els.adminNotice, "正在删除评论...");
+  const { error } = await client.rpc("admin_delete_comment", { p_comment_id: commentId });
+  if (error) {
+    setNotice(els.adminNotice, error.message, true);
+    return;
+  }
+
+  const refreshTasks = [loadAdminData()];
+  if (state.activeSubmission) {
+    refreshTasks.push(loadComments());
+  }
+  await Promise.all(refreshTasks);
+  setNotice(els.adminNotice, "评论已删除。");
+}
+
 function updateAdminSubmissionLimitUi() {
   if (!els.adminSubmissionLimitEnabled || !els.adminSubmissionLimitMax) return;
   els.adminSubmissionLimitMax.disabled = !els.adminSubmissionLimitEnabled.checked;
@@ -1473,6 +1530,39 @@ async function handleAdminSubmissionLimit(event) {
     };
     renderAdminSubmissionLimit();
     setNotice(els.adminNotice, "普通用户提交限制已保存。");
+  } finally {
+    setFormBusy(formElement, false);
+  }
+}
+
+async function handleAdminChannelSettings(event) {
+  event.preventDefault();
+  if (!client || !state.profile?.is_admin) return;
+
+  const formElement = event.currentTarget;
+  const submissionEnabled = Boolean(els.adminSubmissionChannelEnabled?.checked);
+  const ratingEnabled = Boolean(els.adminRatingChannelEnabled?.checked);
+
+  setFormBusy(formElement, true, "保存中...");
+  setNotice(els.adminNotice, "正在保存通道设置...");
+  try {
+    const { data, error } = await client.rpc("admin_update_channel_settings", {
+      p_submission_enabled: submissionEnabled,
+      p_rating_enabled: ratingEnabled,
+    });
+
+    if (error) {
+      setNotice(els.adminNotice, error.message, true);
+      return;
+    }
+
+    const settings = Array.isArray(data) ? data[0] : data;
+    state.adminChannelSettings = {
+      submissionEnabled: settings?.submission_enabled !== false,
+      ratingEnabled: settings?.rating_enabled !== false,
+    };
+    renderAdminChannelSettings();
+    setNotice(els.adminNotice, "通道设置已保存。");
   } finally {
     setFormBusy(formElement, false);
   }
@@ -2727,6 +2817,20 @@ async function submitQuickRating(score) {
     return;
   }
 
+  if (!state.profile?.is_admin) {
+    let channelSettings;
+    try {
+      channelSettings = await loadChannelSettings();
+    } catch (error) {
+      setNotice(els.authNotice, error.message, true);
+      return;
+    }
+    if (!channelSettings.ratingEnabled) {
+      setNotice(els.authNotice, "评分通道当前已关闭，请等待管理员开放后再评分。", true);
+      return;
+    }
+  }
+
   const { error } = await client.from("ratings").upsert(
     {
       submission_id: state.activeSubmission.id,
@@ -2760,6 +2864,20 @@ async function submitRating(event) {
   if (!state.session) {
     setNotice(els.authNotice, "请先登录再评分。", true);
     return;
+  }
+
+  if (!state.profile?.is_admin) {
+    let channelSettings;
+    try {
+      channelSettings = await loadChannelSettings();
+    } catch (error) {
+      setNotice(els.authNotice, error.message, true);
+      return;
+    }
+    if (!channelSettings.ratingEnabled) {
+      setNotice(els.authNotice, "评分通道当前已关闭，请等待管理员开放后再评分。", true);
+      return;
+    }
   }
 
   const { error } = await client.from("ratings").upsert(
@@ -2873,6 +2991,23 @@ async function loadSubmissionLimitSettings() {
   };
 }
 
+async function loadChannelSettings() {
+  if (!client) {
+    return { submissionEnabled: true, ratingEnabled: true };
+  }
+
+  const { data, error } = await client.rpc("channel_settings");
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const settings = Array.isArray(data) ? data[0] : data;
+  return {
+    submissionEnabled: settings?.submission_enabled !== false,
+    ratingEnabled: settings?.rating_enabled !== false,
+  };
+}
+
 async function handleSubmission(event) {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -2891,6 +3026,12 @@ async function handleSubmission(event) {
   setFormBusy(formElement, true, "提交中...");
   try {
     if (!state.profile?.is_admin) {
+      const channelSettings = await loadChannelSettings();
+      if (!channelSettings.submissionEnabled) {
+        setNotice(els.submitNotice, "提交通道当前已关闭，请等待管理员开放后再提交。", true);
+        return;
+      }
+
       const limitSettings = await loadSubmissionLimitSettings();
       if (limitSettings.enabled) {
         const { count, error } = await client
@@ -3066,6 +3207,7 @@ document.querySelectorAll("[data-admin-tab]").forEach((button) => {
 els.adminSubmissionForm?.addEventListener("submit", handleAdminSubmission);
 els.adminSubmissionLimitForm?.addEventListener("submit", handleAdminSubmissionLimit);
 els.adminSubmissionLimitEnabled?.addEventListener("change", updateAdminSubmissionLimitUi);
+els.adminChannelForm?.addEventListener("submit", handleAdminChannelSettings);
 els.adminFileForm?.addEventListener("submit", replaceAdminSubmissionFile);
 els.adminFileForm
   ?.querySelector("[data-admin-delete-file]")
@@ -3081,6 +3223,10 @@ els.adminRatingsTable?.addEventListener("click", (event) => {
 els.adminSubmissionsTable?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-admin-delete-submission]");
   if (button) deleteAdminSubmission(button.dataset.adminDeleteSubmission);
+});
+els.adminCommentsTable?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-delete-comment]");
+  if (button) deleteAdminComment(button.dataset.adminDeleteComment);
 });
 
 async function initApp() {
